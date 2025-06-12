@@ -1,0 +1,31 @@
+/* Centra el texto "Leer comentarios" y asegura el 100% de ancho */
+.accordion-button {
+    text-align: center; /* Centra el texto horizontalmente */
+    width: 100%;        /* Asegura que el botón ocupe todo el ancho disponible */
+
+    /* Elimina colores de fondo, bordes y sombras por defecto de Bootstrap para un estilo "sin color" */
+    background-color: transparent; /* Fondo transparente */
+    color: black;                  /* Color de texto por defecto (puedes ajustar si es necesario) */
+    border: none;                  /* Sin borde */
+    box-shadow: none;              /* Sin sombra */
+    outline: none !important;      /* Elimina el contorno de foco por defecto del navegador/Bootstrap */
+}
+
+/* Estilo del botón cuando no está colapsado (abierto) */
+.accordion-button:not(.collapsed) {
+    background-color: transparent; /* Mantiene el fondo transparente cuando está abierto */
+    color: black;                  /* Mantiene el color del texto */
+    box-shadow: none;              /* Sin sombra cuando está abierto */
+}
+
+/* Estilo del botón al enfocar (con tabulador) */
+.accordion-button:focus {
+    box-shadow: none !important; /* Elimina la sombra azul de foco de Bootstrap */
+    outline: none !important;    /* Reafirma la eliminación del contorno */
+}
+
+/* Opcional: Estilo al pasar el ratón (hover) */
+.accordion-button:hover {
+    background-color: #f8f9fa; /* Un ligero cambio de fondo al pasar el ratón */
+    color: black;              /* Mantiene el color del texto */
+}

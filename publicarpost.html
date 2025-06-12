@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSIDEA Layout</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="assets/css/styles.css"> 
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a1a; /* Dark background for the body */
+            margin: 0;
+            font-family: sans-serif;
+            color: #e0e0e0; /* Light text color for general body content */
+        }
+
+        .container {
+            position: relative;
+            background-color: #0d0d0d; /* Even darker background for the container */
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); /* More prominent shadow */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 600px;
+            box-sizing: border-box;
+            gap: 0px; /* No gap between the top section and bottom content */
+        }
+
+        .top-section {
+            display: flex;
+            align-items: flex-start;
+            width: 100%;
+        }
+
+        .img-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-right: 15px;
+        }
+
+        .img-circle {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #6a0dad; /* Purple border */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #e0e0e0; /* Light text */
+            background-color: #330066; /* Dark purple background */
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            flex-grow: 1;
+            border: 1px solid #6a0dad; /* Purple border */
+            border-radius: 5px;
+            padding: 10px;
+            display: flex;
+            align-items: flex-start;
+            min-height: 120px;
+            margin-bottom: -1px; /* Adjust to bring elements closer */
+            background-color: #1a1a1a; /* Dark background for input */
+        }
+
+        .input-field {
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 1em;
+            color: #e0e0e0; /* Light text */
+            resize: none;
+            padding: 0;
+            margin: 0;
+            font-family: sans-serif;
+            box-sizing: border-box;
+            background-color: transparent; /* Ensure background is transparent */
+        }
+        /* Style for the placeholder visually in textarea */
+        .input-field::placeholder {
+            color: #888; /* Lighter grey for placeholder */
+        }
+        /* For contenteditable div, though the HTML uses textarea */
+        .input-field:empty:before {
+            content: attr(placeholder);
+            color: #888;
+            pointer-events: none;
+        }
+
+        /* --- TOOLBAR STYLES --- */
+        .toolbar {
+            width: 100%;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 15px;
+            padding: 10px 0;
+            border: 1px solid #6a0dad; /* Purple border */
+            border-top: none; /* No top border to stick to input */
+            border-radius: 0 0 5px 5px;
+            background-color: #330066; /* Dark purple background for toolbar */
+            padding-left: 10px;
+            margin-top: -10px; /* Adjust to overlap with input-wrapper border */
+            z-index: 1;
+        }
+        
+        .toolbar-icon {
+            font-size: 1.2em;
+            color: #e0e0e0; /* Light color for icons */
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .toolbar-icon:hover {
+            color: #9933ff; /* Lighter purple on hover */
+        }
+
+        .publish-button {
+            margin-left: auto;
+            padding: 5px 15px;
+            border: 1px solid #9933ff; /* Lighter purple border */
+            background-color: #9933ff; /* Lighter purple background */
+            color: white; /* White text for contrast */
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-right: 10px;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .publish-button:hover {
+            background-color: #6a0dad; /* Darker purple on hover */
+            border-color: #6a0dad;
+        }
+        /* --- END TOOLBAR STYLES --- */
+
+        .accordion {
+            width: 100%;
+            margin-top: 20px; /* Adjusted margin to ensure separation */
+            margin-bottom: 20px; /* Adjusted margin for separation */
+        }
+
+        /* Bootstrap Accordion Overrides for Dark Theme */
+        .accordion-item {
+            background-color: #1a1a1a; /* Dark background for accordion items */
+            border: 1px solid #6a0dad; /* Purple border */
+            color: #e0e0e0; /* Light text color */
+        }
+
+        .accordion-header .accordion-button {
+            background-color: #330066; /* Dark purple for accordion header */
+            color: #e0e0e0; /* Light text for header */
+            border-bottom: 1px solid #6a0dad; /* Purple border for header */
+        }
+
+        .accordion-header .accordion-button:not(.collapsed) {
+            background-color: #6a0dad; /* Purple when open */
+            color: white; /* White text when open */
+            box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .2);
+        }
+
+        .accordion-header .accordion-button:focus {
+            box-shadow: 0 0 0 0.25rem rgba(153, 51, 255, 0.25); /* Purple focus ring */
+        }
+
+        .accordion-body {
+            color: #e0e0e0; /* Light text for body content */
+            background-color: #0d0d0d; /* Even darker background for body */
+        }
+
+
+        .bottom-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center; 
+            margin-top: 1px; /* Keep some margin if needed */
+            margin-bottom: 8px; /* Keep some margin if needed */
+        }
+
+        .bottom-img-circle {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #6a0dad; /* Purple border */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #e0e0e0; /* Light text */
+            background-color: #330066; /* Dark purple background */
+            flex-shrink: 0;
+        }
+
+        .bottom-username-text {
+            font-size: 1em;
+            color: #e0e0e0; /* Light text */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="bottom-content">
+            <div class="bottom-img-circle">IMGPF</div>
+            <span class="bottom-username-text">Username</span>
+        </div>
+
+        <div class="top-section">
+
+
+            <div class="input-wrapper">
+                <div class="input-field" id="mainInputField" contenteditable="true" placeholder="Inputfield"></div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="format-icons">
+                <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto"></i>
+                <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
+                <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
+                <i class="bi bi-type-strikethrough toolbar-icon" data-command="strikeThrough" title="Tachar"></i>
+            </div>
+            
+            
+            <button class="publish-button">Publicar</button>
+        </div>
+
+        </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mainInputField = document.getElementById('mainInputField');
+            const toolbarIcons = document.querySelectorAll('.toolbar-icon[data-command]');
+
+            toolbarIcons.forEach(icon => {
+                icon.addEventListener('mousedown', function(event) {
+                    event.preventDefault(); 
+                    
+                    const command = this.dataset.command;
+                    
+                    mainInputField.focus(); 
+                    
+                    document.execCommand(command, false, null);
+                });
+            });
+
+            const cameraIcon = document.querySelector('.bi-camera-fill');
+            if (cameraIcon) {
+                cameraIcon.addEventListener('click', function() {
+                    alert('Aquí se abriría un diálogo para cargar una foto.');
+                });
+            }
+
+            // NUEVO: Funcionalidad para el botón Publicar
+            const publishButton = document.querySelector('.publish-button');
+            if (publishButton) {
+                publishButton.addEventListener('click', function() {
+                    const content = mainInputField.innerHTML; // Obtener el HTML con formato
+                    alert('Contenido a publicar: ' + content);
+                    // Aquí podrías enviar 'content' a tu servidor
+                });
+            }
+        });
+    </script>
+</body>
+</html>
