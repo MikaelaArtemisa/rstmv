@@ -11,17 +11,17 @@ body {
   background-color: #0A0F1E; 
   /* Texto claro para alto contraste */
   color: #E0F7FA; 
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* min-height, display, align-items, justify-content se mueven al .container en HTML con clases de Bootstrap */
   overflow-x: hidden;
 }
 
+/* El .container de Bootstrap ya tiene un max-width, pero si quieres uno específico aquí lo sobrescribes */
+/* No aplicamos display/align/justify aquí porque lo hacemos en el HTML */
 .container {
-  max-width: 400px;
-  width: 100%;
-  padding: 20px;
+  /* El max-width de 400px lo mantenemos para el layout del contenido */
+  max-width: 400px; 
+  width: 100%; /* Asegura que ocupe el ancho disponible */
+  padding: 20px; /* Mantén tu padding */
 }
 
 /* Panel principal que contiene los formularios */
@@ -59,13 +59,16 @@ body {
 }
 
 /* Estilos para los formularios de login y registro */
+/* Bootstrap ya maneja el display flex en .form-control si es necesario, 
+   pero puedes mantener gap para la separación vertical si no usas mb-3 */
 .auth-form {
-  display: flex;
+  display: flex; /* Asegura el layout flex para los elementos internos */
   flex-direction: column;
-  gap: 15px;
+  gap: 15px; /* Esto puede ser redundante si usas mb-3 en los inputs */
 }
 
-.auth-form input {
+/* Aquí adaptamos los inputs para que respeten form-control de Bootstrap */
+.auth-form .form-control { /* Apuntamos a los inputs con la clase form-control */
   padding: 12px;
   /* Fondo del input en un azul aún más oscuro */
   background-color: #0F162A; 
@@ -78,18 +81,19 @@ body {
   animation: slideIn 0.8s ease-out 0.6s both;
 }
 
-.auth-form input::placeholder {
+.auth-form .form-control::placeholder { /* Apuntamos al placeholder de los inputs con form-control */
   /* Placeholder en un tono de gris más claro para contraste */
   color: #A7D9EA; 
 }
 
-.auth-form button {
+/* Estilos para los botones (ahora con clases btn y btn-primary de Bootstrap) */
+.auth-form .btn-primary { /* Apuntamos al botón primario de Bootstrap */
   padding: 12px;
   /* Botón principal con el celeste vibrante */
-  background-color: #00BCD4; 
+  background-color: #00BCD4 !important; /* Usamos !important para sobrescribir el color por defecto de Bootstrap */
   color: #ffffff;
   /* Borde del botón igual al fondo para un look sólido */
-  border: 1px solid #00BCD4; 
+  border: 1px solid #00BCD4 !important; /* !important */
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
@@ -99,10 +103,10 @@ body {
   margin-top: 10px;
 }
 
-.auth-form button:hover {
+.auth-form .btn-primary:hover {
   /* Cambio de color del botón al pasar el ratón */
-  background-color: #0097A7; 
-  border-color: #0097A7;
+  background-color: #0097A7 !important; /* !important */
+  border-color: #0097A7 !important; /* !important */
   transform: scale(1.05);
 }
 
@@ -121,6 +125,7 @@ body {
 }
 
 /* ---- Estilos para personalizar el Acordeón de Bootstrap ---- */
+/* Estas reglas son bastante específicas y a menudo necesitan !important para sobrescribir Bootstrap */
 .accordion, .accordion-item, .accordion-header, .accordion-button {
   /* Fondo del acordeón en un azul oscuro similar al del panel */
   background-color: #1A2038 !important; 
@@ -133,7 +138,7 @@ body {
   font-size: 0.9rem;
   font-weight: 600;
   text-align: center;
-  display: block !important;
+  display: block !important; /* Esto es para centrar el texto si no hay ícono */
 }
 
 .accordion-button:not(.collapsed) {
@@ -195,3 +200,57 @@ body {
   .welcome-text { font-size: 1rem; }
   .form-container, .accordion-body { padding: 20px; }
 }
+
+
+
+
+
+
+
+
+/* --- NUEVOS ESTILOS PARA EL FOOTER (SIMILAR AL NAVBAR) --- */
+.custom-footer {
+  /* Fondo del footer: mismo azul oscuro que el navbar */
+  background-color: #1A2038 !important; 
+  /* Asegura que el texto y los enlaces sean claros */
+  color: #E0F7FA;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5); /* Sombra hacia arriba */
+}
+
+/* El navbar-brand en el footer reutiliza el estilo del navbar-brand */
+.custom-footer .navbar-brand {
+    color: #00BCD4 !important; /* Celeste vibrante para el logo del footer */
+    font-weight: 700;
+    font-size: 1.5rem; /* Ajusta si quieres que el logo del footer sea diferente tamaño */
+}
+
+/* Estilos para los enlaces del footer, similares a los nav-link del navbar */
+.custom-footer-link {
+  color: #B2EBF2 !important; /* Celeste más suave para los enlaces */
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.custom-footer-link:hover {
+  color: #00BCD4 !important; /* Celeste vibrante al pasar el ratón */
+}
+
+.social-links .custom-footer-link {
+    font-size: 1.5rem; /* Tamaño de los iconos de redes sociales */
+}
+
+/* Ajustes para el texto de derechos de autor */
+.custom-footer .small {
+    font-size: 0.85rem; /* Hace el texto un poco más pequeño */
+    color: #A7D9EA !important; /* Un gris-celeste para este texto */
+}
+
+/* --- Asegúrate de tener Font Awesome para los íconos de redes sociales --- */
+/* Si no lo tienes, puedes incluirlo en tu <head> así:
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QimAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+*/
+
+/* --- ESTILOS EXISTENTES (se muestran solo para referencia de contexto) --- */
+
+/* Estilos base y generales */
+/* ... (el resto de tus estilos existentes) ... */
