@@ -1,31 +1,197 @@
-/* Centra el texto "Leer comentarios" y asegura el 100% de ancho */
+/* Estilos base y generales */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+body {
+  /* Fondo oscuro para contraste, un azul muy oscuro */
+  background-color: #0A0F1E; 
+  /* Texto claro para alto contraste */
+  color: #E0F7FA; 
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.container {
+  max-width: 400px;
+  width: 100%;
+  padding: 20px;
+}
+
+/* Panel principal que contiene los formularios */
+.auth-panel {
+  /* Fondo del panel en un azul oscuro complementario */
+  background-color: #1A2038; 
+  border-radius: 12px;
+  /* Sombra más pronunciada para el efecto de profundidad */
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.7); 
+  animation: fadeIn 1s ease-out;
+  overflow: hidden; /* Para mantener los bordes redondeados del acordeón */
+}
+
+.form-container {
+  padding: 30px;
+}
+
+.welcome-header {
+  font-size: 2.5rem;
+  font-weight: 700;
+  /* Celeste vibrante para el título principal */
+  color: #00BCD4; 
+  margin-bottom: 1rem;
+  text-align: center;
+  animation: slideIn 0.8s ease-out 0.2s both;
+}
+
+.welcome-text {
+  font-size: 1.1rem;
+  /* Celeste más suave para el texto secundario */
+  color: #B2EBF2; 
+  margin-bottom: 2rem;
+  text-align: center;
+  animation: slideIn 0.8s ease-out 0.4s both;
+}
+
+/* Estilos para los formularios de login y registro */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.auth-form input {
+  padding: 12px;
+  /* Fondo del input en un azul aún más oscuro */
+  background-color: #0F162A; 
+  /* Borde con un celeste distintivo */
+  border: 1px solid #00BCD4; 
+  border-radius: 8px;
+  /* Color de texto claro para el input */
+  color: #E0F7FA; 
+  font-size: 1rem;
+  animation: slideIn 0.8s ease-out 0.6s both;
+}
+
+.auth-form input::placeholder {
+  /* Placeholder en un tono de gris más claro para contraste */
+  color: #A7D9EA; 
+}
+
+.auth-form button {
+  padding: 12px;
+  /* Botón principal con el celeste vibrante */
+  background-color: #00BCD4; 
+  color: #ffffff;
+  /* Borde del botón igual al fondo para un look sólido */
+  border: 1px solid #00BCD4; 
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  animation: slideIn 0.8s ease-out 0.8s both;
+  margin-top: 10px;
+}
+
+.auth-form button:hover {
+  /* Cambio de color del botón al pasar el ratón */
+  background-color: #0097A7; 
+  border-color: #0097A7;
+  transform: scale(1.05);
+}
+
+/* Estilos para los mensajes de feedback de contraseña */
+.feedback {
+  font-size: 0.85rem;
+  /* Color de error en un rojo brillante */
+  color: #FF5252; 
+  padding-left: 4px;
+  min-height: 1.2em; /* Evita que el layout salte */
+}
+
+.feedback.success {
+  /* Color de éxito en un verde vibrante */
+  color: #69F0AE; 
+}
+
+/* ---- Estilos para personalizar el Acordeón de Bootstrap ---- */
+.accordion, .accordion-item, .accordion-header, .accordion-button {
+  /* Fondo del acordeón en un azul oscuro similar al del panel */
+  background-color: #1A2038 !important; 
+  /* Texto del acordeón claro */
+  color: #E0F7FA !important; 
+  border: none !important;
+}
+
 .accordion-button {
-    text-align: center; /* Centra el texto horizontalmente */
-    width: 100%;        /* Asegura que el botón ocupe todo el ancho disponible */
-
-    /* Elimina colores de fondo, bordes y sombras por defecto de Bootstrap para un estilo "sin color" */
-    background-color: transparent; /* Fondo transparente */
-    color: black;                  /* Color de texto por defecto (puedes ajustar si es necesario) */
-    border: none;                  /* Sin borde */
-    box-shadow: none;              /* Sin sombra */
-    outline: none !important;      /* Elimina el contorno de foco por defecto del navegador/Bootstrap */
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  display: block !important;
 }
 
-/* Estilo del botón cuando no está colapsado (abierto) */
 .accordion-button:not(.collapsed) {
-    background-color: transparent; /* Mantiene el fondo transparente cuando está abierto */
-    color: black;                  /* Mantiene el color del texto */
-    box-shadow: none;              /* Sin sombra cuando está abierto */
+  box-shadow: none !important;
+  /* Color del botón de acordeón activo en celeste vibrante */
+  color: #00BCD4 !important; 
 }
 
-/* Estilo del botón al enfocar (con tabulador) */
 .accordion-button:focus {
-    box-shadow: none !important; /* Elimina la sombra azul de foco de Bootstrap */
-    outline: none !important;    /* Reafirma la eliminación del contorno */
+  /* Sombra de enfoque con un celeste semitransparente */
+  box-shadow: 0 0 0 0.25rem rgba(0, 188, 212, 0.25) !important; 
 }
 
-/* Opcional: Estilo al pasar el ratón (hover) */
-.accordion-button:hover {
-    background-color: #f8f9fa; /* Un ligero cambio de fondo al pasar el ratón */
-    color: black;              /* Mantiene el color del texto */
+.accordion-button::after {
+  display: none; /* Oculta la flecha por defecto del acordeón */
+}
+
+.accordion-item {
+  /* Borde superior del ítem de acordeón en un azul más oscuro */
+  border-top: 1px solid #0F162A !important; 
+}
+
+.accordion-body {
+  padding: 30px;
+  padding-top: 15px;
+  /* Fondo del cuerpo del acordeón igual al del panel */
+  background-color: #1A2038; 
+}
+
+/* Efecto de fondo y animaciones */
+.background-effect {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  /* Degradado radial con un celeste muy tenue */
+  background: radial-gradient(circle, rgba(0, 188, 212, 0.05) 0%, transparent 70%); 
+  z-index: -1;
+  animation: pulse 10s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.05); }
+}
+
+@media (max-width: 600px) {
+  .container { padding: 10px; }
+  .welcome-header { font-size: 2rem; }
+  .welcome-text { font-size: 1rem; }
+  .form-container, .accordion-body { padding: 20px; }
 }
