@@ -11,18 +11,10 @@
       <small>Buscar</small>
     </a>
 
-    <!-- Botón de publicar con opciones -->
-    <div class="dropup">
-      <a class="nav-link text-white d-flex flex-column align-items-center dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="bi bi-plus-circle-fill fs-4"></i>
-        <small>Publicar</small>
-      </a>
-      <ul class="dropdown-menu text-start">
-        <li><a class="dropdown-item" href="#">Publicación rápida</a></li>
-        <li><a class="dropdown-item" href="#">Publicación programada</a></li>
-        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalPublicacionAvanzada">Publicación avanzada</a></li>
-      </ul>
-    </div>
+    <a href="#" class="nav-link text-white d-flex flex-column align-items-center">
+      <i class="bi bi-plus-circle-fill fs-4"></i>
+      <small>Publicar</small>
+    </a>
 
     <a href="#" class="nav-link text-white d-flex flex-column align-items-center">
       <i class="bi bi-chat-dots-fill fs-4"></i>

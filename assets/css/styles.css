@@ -13,15 +13,28 @@ body {
   color: #E0F7FA; 
   /* min-height, display, align-items, justify-content se mueven al .container en HTML con clases de Bootstrap */
   overflow-x: hidden;
+  /* Estilos originales del HTML */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  font-family: sans-serif; /* Nota: 'Segoe UI' de tu CSS tiene prioridad sobre 'sans-serif' */
 }
 
 /* El .container de Bootstrap ya tiene un max-width, pero si quieres uno específico aquí lo sobrescribes */
-/* No aplicamos display/align/justify aquí porque lo hacemos en el HTML */
 .container {
   /* El max-width de 400px lo mantenemos para el layout del contenido */
   max-width: 400px; 
   width: 100%; /* Asegura que ocupe el ancho disponible */
   padding: 20px; /* Mantén tu padding */
+  /* Estilos originales del HTML */
+  background-color: #0d0d0d;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* Panel principal que contiene los formularios */
@@ -59,8 +72,6 @@ body {
 }
 
 /* Estilos para los formularios de login y registro */
-/* Bootstrap ya maneja el display flex en .form-control si es necesario, 
-   pero puedes mantener gap para la separación vertical si no usas mb-3 */
 .auth-form {
   display: flex; /* Asegura el layout flex para los elementos internos */
   flex-direction: column;
@@ -68,7 +79,7 @@ body {
 }
 
 /* Aquí adaptamos los inputs para que respeten form-control de Bootstrap */
-.auth-form .form-control { /* Apuntamos a los inputs con la clase form-control */
+.auth-form .form-control {
   padding: 12px;
   /* Fondo del input en un azul aún más oscuro */
   background-color: #0F162A; 
@@ -81,13 +92,13 @@ body {
   animation: slideIn 0.8s ease-out 0.6s both;
 }
 
-.auth-form .form-control::placeholder { /* Apuntamos al placeholder de los inputs con form-control */
+.auth-form .form-control::placeholder {
   /* Placeholder en un tono de gris más claro para contraste */
   color: #A7D9EA; 
 }
 
 /* Estilos para los botones (ahora con clases btn y btn-primary de Bootstrap) */
-.auth-form .btn-primary { /* Apuntamos al botón primario de Bootstrap */
+.auth-form .btn-primary {
   padding: 12px;
   /* Botón principal con el celeste vibrante */
   background-color: #00BCD4 !important; /* Usamos !important para sobrescribir el color por defecto de Bootstrap */
@@ -125,7 +136,6 @@ body {
 }
 
 /* ---- Estilos para personalizar el Acordeón de Bootstrap ---- */
-/* Estas reglas son bastante específicas y a menudo necesitan !important para sobrescribir Bootstrap */
 .accordion, .accordion-item, .accordion-header, .accordion-button {
   /* Fondo del acordeón en un azul oscuro similar al del panel */
   background-color: #1A2038 !important; 
@@ -139,17 +149,25 @@ body {
   font-weight: 600;
   text-align: center;
   display: block !important; /* Esto es para centrar el texto si no hay ícono */
+  /* Estilos originales del HTML */
+  background-color: #330066;
+  color: #e0e0e0;
 }
 
 .accordion-button:not(.collapsed) {
   box-shadow: none !important;
   /* Color del botón de acordeón activo en celeste vibrante */
   color: #00BCD4 !important; 
+  /* Estilos originales del HTML */
+  background-color: #6a0dad;
+  color: white;
 }
 
 .accordion-button:focus {
   /* Sombra de enfoque con un celeste semitransparente */
   box-shadow: 0 0 0 0.25rem rgba(0, 188, 212, 0.25) !important; 
+  /* Estilos originales del HTML */
+  box-shadow: 0 0 0 0.25rem rgba(153, 51, 255, 0.25);
 }
 
 .accordion-button::after {
@@ -159,6 +177,10 @@ body {
 .accordion-item {
   /* Borde superior del ítem de acordeón en un azul más oscuro */
   border-top: 1px solid #0F162A !important; 
+  /* Estilos originales del HTML */
+  background-color: #1a1a1a;
+  border: 1px solid #6a0dad;
+  color: #e0e0e0;
 }
 
 .accordion-body {
@@ -166,6 +188,9 @@ body {
   padding-top: 15px;
   /* Fondo del cuerpo del acordeón igual al del panel */
   background-color: #1A2038; 
+  /* Estilos originales del HTML */
+  background-color: #0d0d0d;
+  color: #e0e0e0;
 }
 
 /* Efecto de fondo y animaciones */
@@ -194,19 +219,107 @@ body {
   50%      { opacity: 0.8; transform: scale(1.05); }
 }
 
-@media (max-width: 600px) {
-  .container { padding: 10px; }
-  .welcome-header { font-size: 2rem; }
-  .welcome-text { font-size: 1rem; }
-  .form-container, .accordion-body { padding: 20px; }
+/* Estilos originales del HTML */
+.top-section {
+  display: flex;
+  width: 100%;
+  margin-bottom: 10px;
 }
 
+.img-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-right: 15px;
+}
 
+.img-circle, .bottom-img-circle {
+  width: 40px;
+  height: 40px;
+  border: 2px solid #6a0dad;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: #e0e0e0;
+  background-color: #330066;
+}
 
+.input-wrapper {
+  flex-grow: 1;
+  border: 1px solid #6a0dad;
+  border-radius: 5px;
+  padding: 10px;
+  background-color: #1a1a1a;
+}
 
+.input-field {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 1em;
+  color: #e0e0e0;
+  resize: none;
+  background-color: transparent;
+}
 
+.input-field::placeholder {
+  color: #888;
+}
 
+.toolbar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 10px;
+  border: 1px solid #6a0dad;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  background-color: #330066;
+  margin-top: -10px;
+}
 
+.toolbar-icon {
+  font-size: 1.2em;
+  color: #e0e0e0;
+  cursor: pointer;
+}
+
+.toolbar-icon:hover {
+  color: #9933ff;
+}
+
+.publish-button {
+  padding: 5px 15px;
+  border: 1px solid #9933ff;
+  background-color: #9933ff;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.publish-button:hover {
+  background-color: #6a0dad;
+  border-color: #6a0dad;
+}
+
+.bottom-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.bottom-username-text {
+  font-size: 1em;
+  color: #e0e0e0;
+}
 
 /* --- NUEVOS ESTILOS PARA EL FOOTER (SIMILAR AL NAVBAR) --- */
 .custom-footer {
@@ -217,14 +330,12 @@ body {
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5); /* Sombra hacia arriba */
 }
 
-/* El navbar-brand en el footer reutiliza el estilo del navbar-brand */
 .custom-footer .navbar-brand {
-    color: #00BCD4 !important; /* Celeste vibrante para el logo del footer */
-    font-weight: 700;
-    font-size: 1.5rem; /* Ajusta si quieres que el logo del footer sea diferente tamaño */
+  color: #00BCD4 !important; /* Celeste vibrante para el logo del footer */
+  font-weight: 700;
+  font-size: 1.5rem; /* Ajusta si quieres que el logo del footer sea diferente tamaño */
 }
 
-/* Estilos para los enlaces del footer, similares a los nav-link del navbar */
 .custom-footer-link {
   color: #B2EBF2 !important; /* Celeste más suave para los enlaces */
   text-decoration: none;
@@ -236,21 +347,191 @@ body {
 }
 
 .social-links .custom-footer-link {
-    font-size: 1.5rem; /* Tamaño de los iconos de redes sociales */
+  font-size: 1.5rem; /* Tamaño de los iconos de redes sociales */
 }
 
-/* Ajustes para el texto de derechos de autor */
 .custom-footer .small {
-    font-size: 0.85rem; /* Hace el texto un poco más pequeño */
-    color: #A7D9EA !important; /* Un gris-celeste para este texto */
+  font-size: 0.85rem; /* Hace el texto un poco más pequeño */
+  color: #A7D9EA !important; /* Un gris-celeste para este texto */
 }
 
-/* --- Asegúrate de tener Font Awesome para los íconos de redes sociales --- */
-/* Si no lo tienes, puedes incluirlo en tu <head> así:
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QimAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-*/
+/* Media Queries */
+@media (max-width: 600px) {
+  .container { padding: 10px; }
+  .welcome-header { font-size: 2rem; }
+  .welcome-text { font-size: 1rem; }
+  .form-container, .accordion-body { padding: 20px; }
+}
 
-/* --- ESTILOS EXISTENTES (se muestran solo para referencia de contexto) --- */
+/*
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*/
 
-/* Estilos base y generales */
-/* ... (el resto de tus estilos existentes) ... */
+    .dashboard-container {
+      background-color: #0d0d0d;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      width: 600px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .dashboard-top-section {
+      display: flex;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .dashboard-img-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-right: 15px;
+    }
+
+    .dashboard-img-circle, .dashboard-bottom-img-circle {
+      width: 40px;
+      height: 40px;
+      border: 2px solid #6a0dad;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.8em;
+      font-weight: bold;
+      color: #e0e0e0;
+      background-color: #330066;
+    }
+
+    .dashboard-input-wrapper {
+      flex-grow: 1;
+      border: 1px solid #6a0dad;
+      border-radius: 5px;
+      padding: 10px;
+      background-color: #1a1a1a;
+    }
+
+    .dashboard-input-field {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 1em;
+      color: #e0e0e0;
+      resize: none;
+      background-color: transparent;
+    }
+
+    .dashboard-input-field::placeholder {
+      color: #888;
+    }
+
+    .dashboard-toolbar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 10px;
+      border: 1px solid #6a0dad;
+      border-top: none;
+      border-radius: 0 0 5px 5px;
+      background-color: #330066;
+      margin-top: -10px;
+    }
+
+    .dashboard-toolbar-icon {
+      font-size: 1.2em;
+      color: #e0e0e0;
+      cursor: pointer;
+    }
+
+    .dashboard-toolbar-icon:hover {
+      color: #9933ff;
+    }
+
+    .dashboard-publish-button {
+      padding: 5px 15px;
+      border: 1px solid #9933ff;
+      background-color: #9933ff;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+
+    .dashboard-publish-button:hover {
+      background-color: #6a0dad;
+      border-color: #6a0dad;
+    }
+
+    .dashboard-accordion {
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    .dashboard-accordion-item {
+      background-color: #1a1a1a;
+      border: 1px solid #6a0dad;
+      color: #e0e0e0;
+    }
+
+    .dashboard-accordion-header .accordion-button {
+      background-color: #330066;
+      color: #e0e0e0;
+    }
+
+    .dashboard-accordion-header .accordion-button:not(.collapsed) {
+      background-color: #6a0dad;
+      color: white;
+    }
+
+    .dashboard-accordion-header .accordion-button:focus {
+      box-shadow: 0 0 0 0.25rem rgba(153, 51, 255, 0.25);
+    }
+
+    .dashboard-accordion-body {
+      background-color: #0d0d0d;
+      color: #e0e0e0;
+    }
+
+    .dashboard-bottom-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .dashboard-bottom-username-text {
+      font-size: 1em;
+      color: #e0e0e0;
+    }
+
+    /*---------------------------*/
+  .social-navbar {
+    height: 70px;
+  }
+
+  .social-navbar .nav-link {
+    font-size: 0.75rem;
+    padding: 0;
+  }
+
+  .social-navbar .bi {
+    font-size: 1.6rem;
+  }
+
+  .dropdown-menu {
+    background-color: #1a1a1a;
+    border: 1px solid #444;
+  }
+
+  .dropdown-item {
+    color: #fff;
+  }
+
+  .dropdown-item:hover {
+    background-color: #333;
+  }
