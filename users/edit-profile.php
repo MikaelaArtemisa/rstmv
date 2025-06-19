@@ -1,10 +1,46 @@
 <?php
 session_start();
+require_once '../includes/db.php';
 
-// Simulación de datos actuales (en un caso real, vendrían de la BD)
-$current_username = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['username']) : 'usuario123';
-$current_name = 'Nombre de Ejemplo';
-$current_desc = 'Apasionado por la tecnología, desarrollo web y diseño UI/UX. Siempre aprendiendo y compartiendo conocimiento.';
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ../index.php?expired=1');
+    exit;
+}
+$user_id = $_SESSION['user_id'];
+
+// Obtener datos actuales del usuario
+$stmt = $pdo->prepare("SELECT username, aboutme, email FROM users WHERE id = ? LIMIT 1");
+$stmt->execute([$user_id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+$current_username = $user['username'] ?? '';
+$current_desc = $user['aboutme'] ?? '';
+$current_email = $user['email'] ?? '';
+
+$msg = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $new_username = trim($_POST['username'] ?? '');
+    $new_desc = trim($_POST['desc'] ?? '');
+    if ($new_username === '') {
+        $msg = '<div class="alert alert-danger">El nombre de usuario no puede estar vacío.</div>';
+    } else {
+        // Verificar si el username está en uso por otro usuario
+        $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1");
+        $stmt->execute([$new_username, $user_id]);
+        if ($stmt->fetch()) {
+            $msg = '<div class="alert alert-danger">El nombre de usuario ya está en uso.</div>';
+        } else {
+            // Actualizar username y aboutme
+            $stmt = $pdo->prepare("UPDATE users SET username = ?, aboutme = ? WHERE id = ?");
+            $stmt->execute([$new_username, $new_desc, $user_id]);
+            $_SESSION['username'] = $new_username;
+            $current_username = $new_username;
+            $current_desc = $new_desc;
+            $msg = '<div class="alert alert-success">¡Perfil actualizado exitosamente!</div>';
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -20,45 +56,21 @@ $current_desc = 'Apasionado por la tecnología, desarrollo web y diseño UI/UX. 
   <div class="d-flex flex-column justify-content-center align-items-center min-vh-100" style="min-height:100vh;">
     <div class="dashboard-container" style="max-width: 420px; width:100%; background-color: #0d0d0d; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); padding: 32px 24px;">
       <h2 class="mb-4 text-center fw-bold" style="color:#c2a4ff;"><i class="bi bi-pencil-square me-2"></i>Editar Perfil</h2>
-      <form id="editProfileForm" autocomplete="off">
+      <?php echo $msg; ?>
+      <form method="POST" autocomplete="off">
         <div class="mb-3">
           <label for="username" class="form-label">Usuario</label>
-          <input type="text" class="form-control bg-dark text-light border-secondary" id="username" name="username" value="<?php echo $current_username; ?>" required minlength="3" maxlength="20">
+          <input type="text" class="form-control bg-dark text-light border-secondary" id="username" name="username" value="<?php echo htmlspecialchars($current_username); ?>" required minlength="3" maxlength="50">
         </div>
         <div class="mb-3">
-          <label for="name" class="form-label">Nombre</label>
-          <input type="text" class="form-control bg-dark text-light border-secondary" id="name" name="name" value="<?php echo $current_name; ?>" required maxlength="40">
-        </div>
-        <div class="mb-3">
-          <label for="desc" class="form-label">Descripción</label>
-          <textarea class="form-control bg-dark text-light border-secondary" id="desc" name="desc" rows="3" maxlength="180" required><?php echo $current_desc; ?></textarea>
+          <label for="desc" class="form-label">Biografía</label>
+          <textarea class="form-control bg-dark text-light border-secondary" id="desc" name="desc" rows="3" maxlength="255" required><?php echo htmlspecialchars($current_desc); ?></textarea>
         </div>
         <button type="submit" class="btn btn-primary w-100">Guardar Cambios</button>
-        <div id="msgSuccess" class="alert alert-success mt-3 d-none" role="alert">
-          ¡Perfil actualizado exitosamente! (Simulado)
-        </div>
       </form>
       <a href="profile.php" class="btn btn-link text-secondary mt-3"><i class="bi bi-arrow-left"></i> Volver al perfil</a>
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-  <script>
-    document.getElementById('editProfileForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      // Validación básica
-      const username = document.getElementById('username').value.trim();
-      const name = document.getElementById('name').value.trim();
-      const desc = document.getElementById('desc').value.trim();
-      if(username.length < 3 || name.length < 1 || desc.length < 1) {
-        alert('Por favor, completa todos los campos correctamente.');
-        return;
-      }
-      // Simulación de guardado
-      document.getElementById('msgSuccess').classList.remove('d-none');
-      setTimeout(() => {
-        document.getElementById('msgSuccess').classList.add('d-none');
-      }, 2000);
-    });
-  </script>
 </body>
 </html> 

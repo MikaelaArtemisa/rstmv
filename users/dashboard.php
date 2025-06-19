@@ -54,42 +54,7 @@ $username = htmlspecialchars($_SESSION['username']);
       </div>
     </div>
 
-    <!-- Lista de posts publicados -->
-    <div id="postsList" class="w-100 mt-4"></div>
-
-    <div class="dashboard-top-section">
-      <div class="dashboard-img-sidebar">
-        <center>
-        <div class="dashboard-img-circle">❤️​</div>
-        <span class="dashboard-bottom-username-text">[op1]</span>
-        <br><br>
-        <div class="dashboard-img-circle">☠️​</div>
-        <span class="dashboard-bottom-username-text">[op1]</span>
-        <br><br>
-        <div class="dashboard-img-circle">💢​</div>
-        <span class="dashboard-bottom-username-text">[op1]</span>
-        </center>
-      </div>
-
-      <div class="dashboard-input-wrapper">
-        <textarea class="dashboard-input-field" id="mainInputField" placeholder="Type your thoughts here..."></textarea>
-      </div>
-    </div>
-
-    <div class="dashboard-accordion accordion" id="accordionExample">
-      <div class="dashboard-accordion-item accordion-item">
-        <h2 class="dashboard-accordion-header accordion-header">
-          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-            Ver comentarios
-          </button>
-        </h2>
-        <div id="collapseOne" class="accordion-collapse collapse">
-          <div class="dashboard-accordion-body accordion-body">
-            <strong>Este es el contenido del acordeón.</strong> Se puede abrir y cerrar haciendo clic en el encabezado.
-          </div>
-        </div>
-      </div>
-    </div>
+   
 
     <!-- Timeline de posts publicados -->
     <div class="row row-cols-1 g-4 mt-4">
