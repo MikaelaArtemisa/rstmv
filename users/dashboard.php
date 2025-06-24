@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once '../includes/db.php';
 
 // Verifica si el usuario está logueado
 if (!isset($_SESSION['user_id'])) {
@@ -7,7 +8,68 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+$user_id = $_SESSION['user_id'];
 $username = htmlspecialchars($_SESSION['username']);
+
+// Obtener información del usuario incluyendo la foto de perfil
+$stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ? LIMIT 1");
+$stmt->execute([$user_id]);
+$user_info = $stmt->fetch(PDO::FETCH_ASSOC);
+$profile_picture = $user_info['profile_picture'] ?? '';
+
+// Obtener todos los posts ordenados por fecha descendente
+$stmt = $pdo->prepare("SELECT p.*, u.profile_picture FROM posts p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.fecha DESC LIMIT 20");
+$stmt->execute();
+$posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Función para obtener la URL de la imagen de perfil
+function getProfilePictureUrl($profile_picture, $username) {
+    if (!empty($profile_picture)) {
+        return '../uploads/profile_pictures/' . htmlspecialchars($profile_picture);
+    } else {
+        // Avatar por defecto usando las iniciales del username
+        return 'https://ui-avatars.com/api/?name=' . urlencode($username) . '&background=330066&color=c2a4ff&size=40';
+    }
+}
+
+// Función para procesar contenido HTML y convertirlo a formato visual
+function processContent($content) {
+    // Convertir etiquetas HTML a formato visual
+    $content = str_replace(['<strong>', '<b>'], '**', $content);
+    $content = str_replace(['</strong>', '</b>'], '**', $content);
+    $content = str_replace(['<em>', '<i>'], '*', $content);
+    $content = str_replace(['</em>', '</i>'], '*', $content);
+    $content = str_replace(['<u>'], '__', $content);
+    $content = str_replace(['</u>'], '__', $content);
+    $content = str_replace(['<s>', '<strike>'], '~~', $content);
+    $content = str_replace(['</s>', '</strike>'], '~~', $content);
+    
+    // Limpiar cualquier otra etiqueta HTML
+    $content = strip_tags($content);
+    
+    return $content;
+}
+
+// Función para procesar contenido y mostrar formato real
+function processContentForDisplay($content) {
+    // Convertir etiquetas HTML a formato visual real
+    $content = str_replace(['<strong>', '<b>'], '**', $content);
+    $content = str_replace(['</strong>', '</b>'], '**', $content);
+    $content = str_replace(['<em>', '<i>'], '*', $content);
+    $content = str_replace(['</em>', '</i>'], '*', $content);
+    $content = str_replace(['<u>'], '__', $content);
+    $content = str_replace(['</u>'], '__', $content);
+    $content = str_replace(['<s>', '<strike>'], '~~', $content);
+    $content = str_replace(['</s>', '</strike>'], '~~', $content);
+    
+    // Aplicar formato real
+    $content = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $content);
+    $content = preg_replace('/\*(.*?)\*/s', '<em>$1</em>', $content);
+    $content = preg_replace('/__(.*?)__/s', '<u>$1</u>', $content);
+    $content = preg_replace('/~~(.*?)~~/s', '<s>$1</s>', $content);
+    
+    return $content;
+}
 ?>
 
 
@@ -22,8 +84,223 @@ $username = htmlspecialchars($_SESSION['username']);
     <link rel="stylesheet" href="../assets/css/styles.css"> 
 
   <style>
-
-
+    .profile-picture {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #6a0dad;
+      background: #330066;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .profile-picture:hover {
+      transform: scale(1.1);
+    }
+    .profile-picture-small {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #6a0dad;
+      background: #330066;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .profile-picture-small:hover {
+      transform: scale(1.1);
+    }
+    .username-link {
+      color: #c2a4ff;
+      text-decoration: none;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .username-link:hover {
+      color: #9c7cff;
+      text-decoration: underline;
+    }
+    .modal-image {
+      max-width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+    }
+    
+    /* Estilos del formulario de publicación */
+    .publish-form {
+      background-color: #0d0d0d;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      color: #e0e0e0;
+      font-family: sans-serif;
+    }
+    
+    .publish-form .bottom-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    
+    .publish-form .input-wrapper {
+      flex-grow: 1;
+      border: 1px solid #6a0dad;
+      border-radius: 5px;
+      padding: 10px;
+      display: flex;
+      align-items: flex-start;
+      min-height: 120px;
+      margin-bottom: -1px;
+      background-color: #1a1a1a;
+    }
+    
+    .publish-form .input-field {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 1em;
+      color: #e0e0e0;
+      resize: none;
+      padding: 0;
+      margin: 0;
+      font-family: sans-serif;
+      box-sizing: border-box;
+      background-color: transparent;
+    }
+    
+    .publish-form .input-field::placeholder {
+      color: #888;
+    }
+    
+    .publish-form .toolbar {
+      width: 100%;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 15px;
+      padding: 10px 0;
+      border: 1px solid #6a0dad;
+      border-top: none;
+      border-radius: 0 0 5px 5px;
+      background-color: #330066;
+      padding-left: 10px;
+      margin-top: -10px;
+      z-index: 1;
+    }
+    
+    .publish-form .toolbar-icon {
+      font-size: 1.2em;
+      color: #e0e0e0;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    
+    .publish-form .toolbar-icon:hover {
+      color: #9933ff;
+    }
+    
+    .publish-form .publish-button {
+      margin-left: auto;
+      padding: 5px 15px;
+      border: 1px solid #9933ff;
+      background-color: #9933ff;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-right: 10px;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    
+    .publish-form .publish-button:hover {
+      background-color: #6a0dad;
+      border-color: #6a0dad;
+    }
+    
+    .publish-form .publish-button:disabled {
+      background-color: #666;
+      border-color: #666;
+      cursor: not-allowed;
+    }
+    
+    .post-type-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: #330066;
+      color: #c2a4ff;
+      border-radius: 8px;
+      padding: 0.2em 0.7em;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+    
+    .post-date {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: #aaa;
+      font-size: 0.8em;
+    }
+    
+    .post-content {
+      margin-top: 2.5em;
+      margin-bottom: 1em;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    
+    /* Estilos para preview en tiempo real */
+    .preview-section {
+      margin-top: 15px;
+      padding: 15px;
+      background-color: #1a1a1a;
+      border: 1px solid #6a0dad;
+      border-radius: 5px;
+      display: none;
+    }
+    
+    .preview-section.show {
+      display: block;
+    }
+    
+    .preview-title {
+      color: #c2a4ff;
+      font-size: 0.9em;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    
+    .preview-content {
+      color: #e0e0e0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.95em;
+      line-height: 1.4;
+    }
+    
+    .preview-content strong, .preview-content b {
+      font-weight: bold;
+      color: #fff;
+    }
+    
+    .preview-content em, .preview-content i {
+      font-style: italic;
+      color: #c2a4ff;
+    }
+    
+    .preview-content u {
+      text-decoration: underline;
+      color: #9933ff;
+    }
+    
+    .preview-content s, .preview-content strike {
+      text-decoration: line-through;
+      color: #888;
+    }
   </style>
 </head>
 <body>
@@ -33,7 +310,7 @@ $username = htmlspecialchars($_SESSION['username']);
 
   <div class="dashboard-container">
     <div class="dashboard-bottom-content">
-      <div class="dashboard-bottom-img-circle">IMGPF</div>
+      <img src="<?php echo getProfilePictureUrl($profile_picture, $username); ?>" alt="Foto de perfil" class="profile-picture" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($username); ?>')">
       <span class="dashboard-bottom-username-text"><?php echo $username; ?></span>
     </div>
 
@@ -54,42 +331,78 @@ $username = htmlspecialchars($_SESSION['username']);
       </div>
     </div>
 
+    <!-- Modal para mostrar imagen completa -->
+    <div class="modal fade" id="modalImagen" tabindex="-1" aria-labelledby="modalImagenLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="modalImagenLabel">Foto de perfil</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body text-center">
+            <img id="modalImagenSrc" src="" alt="Imagen completa" class="modal-image">
+          </div>
+        </div>
+      </div>
+    </div>
+
    
 
     <!-- Timeline de posts publicados -->
     <div class="row row-cols-1 g-4 mt-4">
-      <?php for ($i = 1; $i <= 6; $i++): ?>
+      <?php if (empty($posts)): ?>
         <div class="col">
           <div class="card bg-dark text-light h-100 shadow-sm border-0">
-            <div class="card-body d-flex flex-row align-items-stretch gap-3">
-              <div class="dashboard-img-sidebar d-flex flex-column justify-content-center align-items-center gap-2 flex-shrink-0" style="min-width:48px;">
-                <div class="dashboard-img-circle">❤️​</div>
-                <span class="dashboard-bottom-username-text">[100]</span>
-                <div class="dashboard-img-circle">☠️​</div>
-                <span class="dashboard-bottom-username-text">[100]</span>
-                <div class="dashboard-img-circle">💢​</div>
-                <span class="dashboard-bottom-username-text">[100]</span>
-              </div>
-              <div class="flex-grow-1 d-flex flex-column">
-                <div class="d-flex align-items-center mb-2">
-                  <div class="dashboard-img-circle me-2" style="width: 32px; height: 32px; font-size: 1.1rem; line-height: 32px; background:#330066; color:#c2a4ff;">U</div>
-                  <span class="fw-bold" style="color:#c2a4ff;">Usuario</span>
+            <div class="card-body text-center">
+              <p class="text-muted">No hay publicaciones aún. ¡Sé el primero en publicar!</p>
+            </div>
+          </div>
+        </div>
+      <?php else: ?>
+        <?php foreach ($posts as $post): ?>
+          <div class="col">
+            <div class="card bg-dark text-light h-100 shadow-sm border-0">
+              <div class="card-body d-flex flex-row align-items-stretch gap-3">
+                <div class="dashboard-img-sidebar d-flex flex-column justify-content-center align-items-center gap-2 flex-shrink-0" style="min-width:48px;">
+                  <div class="dashboard-img-circle">❤️​</div>
+                  <span class="dashboard-bottom-username-text">[100]</span>
+                  <div class="dashboard-img-circle">☠️​</div>
+                  <span class="dashboard-bottom-username-text">[100]</span>
+                  <div class="dashboard-img-circle">💢​</div>
+                  <span class="dashboard-bottom-username-text">[100]</span>
                 </div>
-                <div class="flex-grow-1 post-content-preview" style="cursor:pointer;" data-post-title="Post timeline #<?php echo $i; ?>" data-post-content="Este es un ejemplo de post publicado en el timeline. Puedes personalizarlo con el contenido real que quieras mostrar.">
-                  <strong>Post timeline #<?php echo $i; ?></strong><br>
-                  Este es un ejemplo de post publicado en el timeline. Puedes personalizarlo con el contenido real que quieras mostrar.
+                <div class="flex-grow-1 d-flex flex-column">
+                  <div class="d-flex align-items-center mb-2">
+                    <img src="<?php echo getProfilePictureUrl($post['profile_picture'], $post['username']); ?>" alt="Foto de perfil" class="profile-picture-small me-2" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($post['username']); ?>')">
+                    <span class="fw-bold username-link" onclick="window.location.href='profile.php?username=<?php echo urlencode($post['username']); ?>'"><?php echo htmlspecialchars($post['username']); ?></span>
+                  </div>
+                  <div class="flex-grow-1 post-content-preview" style="cursor:pointer;" data-post-title="<?php echo htmlspecialchars($post['tipo']); ?>" data-post-content="<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>">
+                    <div class="post-type-badge"><?php echo htmlspecialchars($post['tipo']); ?></div>
+                    <div class="post-date"><?php echo date('d/m/Y', strtotime($post['fecha'])); ?></div>
+                    <div class="post-content">
+                      <?php echo nl2br(processContentForDisplay($post['contenido'])); ?>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      <?php endfor; ?>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
   <script>
+    // Función para mostrar imagen en modal
+    function showImageModal(imageSrc, username) {
+      const modal = new bootstrap.Modal(document.getElementById('modalImagen'));
+      document.getElementById('modalImagenSrc').src = imageSrc;
+      document.getElementById('modalImagenLabel').textContent = 'Foto de perfil de ' + username;
+      modal.show();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       const mainInputField = document.getElementById('mainInputField');
       const toolbarIcons = document.querySelectorAll('.dashboard-toolbar-icon[data-command]');
@@ -140,25 +453,27 @@ $username = htmlspecialchars($_SESSION['username']);
         });
       }
 
-      // HTML del formulario de publicar (solo el contenido interior, sin fondo ni container)
+      // HTML del formulario de publicar con el formato de publicarpost.html
       const publicarFormHtml = `
-        <div class=\"bottom-content\" style=\"display:flex; align-items:center; gap:8px; width:100%; justify-content:center; margin-bottom:8px;\">
-          <div class=\"bottom-img-circle\" style=\"width:40px; height:40px; border:2px solid #6a0dad; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:0.8em; font-weight:bold; color:#e0e0e0; background-color:#330066; flex-shrink:0;\">IMGPF</div>
-          <span class=\"bottom-username-text\" style=\"font-size:1em; color:#e0e0e0;\">Username</span>
-        </div>
-        <div class=\"top-section\" style=\"display:flex; align-items:flex-start; width:100%;\">
-          <div class=\"input-wrapper\" style=\"flex-grow:1; border:1px solid #6a0dad; border-radius:5px; padding:10px; display:flex; align-items:flex-start; min-height:120px; background-color:#1a1a1a;\">
-            <div class=\"input-field\" id=\"mainInputFieldModal\" contenteditable=\"true\" placeholder=\"Inputfield\" style=\"border:none; outline:none; width:100%; font-size:1em; color:#e0e0e0; resize:none; padding:0; margin:0; font-family:sans-serif; box-sizing:border-box; background-color:transparent;\"></div>
+        <div class="publish-form">
+          <div class="bottom-content">
+            <img src="<?php echo getProfilePictureUrl($profile_picture, $username); ?>" alt="Foto de perfil" class="profile-picture" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($username); ?>')">
+            <span class="bottom-username-text" style="font-size:1em; color:#e0e0e0;"><?php echo $username; ?></span>
           </div>
-        </div>
-        <div class=\"toolbar\" style=\"width:100%; display:flex; justify-content:flex-start; align-items:center; gap:15px; padding:10px 0; border:1px solid #6a0dad; border-top:none; border-radius:0 0 5px 5px; background-color:#330066; padding-left:10px; margin-top:-10px; z-index:1;\">
-          <div class=\"format-icons\">
-            <i class=\"bi bi-camera-fill toolbar-icon\" title=\"Cargar foto\"></i>
-            <i class=\"bi bi-type-bold toolbar-icon\" data-command=\"bold\" title=\"Negritas\"></i>
-            <i class=\"bi bi-type-italic toolbar-icon\" data-command=\"italic\" title=\"Cursiva\"></i>
-            <i class=\"bi bi-type-strikethrough toolbar-icon\" data-command=\"strikeThrough\" title=\"Tachar\"></i>
+          <div class="top-section">
+            <div class="input-wrapper">
+              <div class="input-field" id="mainInputFieldModal" contenteditable="true" placeholder="Escribe tu publicación aquí..."></div>
+            </div>
           </div>
-          <button class=\"publish-button\" style=\"margin-left:auto; padding:5px 15px; border:1px solid #9933ff; background-color:#9933ff; color:white; border-radius:5px; cursor:pointer; font-size:0.9em; margin-right:10px;\">Publicar</button>
+          <div class="toolbar">
+            <div class="format-icons">
+              <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto"></i>
+              <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
+              <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
+              <i class="bi bi-type-strikethrough toolbar-icon" data-command="strikeThrough" title="Tachar"></i>
+            </div>
+            <button class="publish-button" id="publishButtonModal">Publicar</button>
+          </div>
         </div>
       `;
 
@@ -169,15 +484,20 @@ $username = htmlspecialchars($_SESSION['username']);
       modal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
         const tipo = button.getAttribute('data-tipo');
+        
         // Inserta el formulario directamente
         modalBody.innerHTML = publicarFormHtml;
+        
         // Personaliza el formulario
         let titulo = modalBody.querySelector('.bottom-username-text');
         if (titulo) titulo.textContent = tipo;
+        
         let input = modalBody.querySelector('.input-field');
         if (input) input.setAttribute('placeholder', 'Escribe tu ' + tipo.toLowerCase() + ' aquí...');
+        
         let btn = modalBody.querySelector('.publish-button');
         if (btn) btn.textContent = 'Publicar ' + tipo;
+        
         // Cambia el título del modal
         modalLabel.textContent = tipo;
 
@@ -191,49 +511,72 @@ $username = htmlspecialchars($_SESSION['username']);
             document.execCommand(command, false, null);
           });
         });
-        // Lógica para publicar el post (solo frontend)
+        
+        // Lógica para publicar el post
         if (btn && input) {
           btn.onclick = null;
           btn.addEventListener('click', function(e) {
             e.preventDefault();
             let texto = input.innerHTML || input.innerText || input.value || input.textContent;
             texto = texto.trim();
+            
             if (!texto) {
-              input.focus();
-              input.style.border = '1px solid #ff5252';
+              alert('El campo de entrada está vacío.');
               return;
             }
-            // Crear el post visualmente
-            const postsList = document.getElementById('postsList');
-            const postDiv = document.createElement('div');
-            postDiv.className = 'card bg-dark text-light mb-3';
-            postDiv.innerHTML = `
-              <div class='card-header fw-bold' style='color:#c2a4ff;'>${tipo}</div>
-              <div class='card-body'><div class='card-text'>${texto.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div></div>
-            `;
-            postsList.prepend(postDiv);
-            // Cerrar el modal
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            modalInstance.hide();
+            
+            // Deshabilitar botón mientras se procesa
+            btn.disabled = true;
+            btn.textContent = 'Publicando...';
+            
+            // Enviar datos al servidor
+            const formData = new FormData();
+            formData.append('tipo', tipo);
+            formData.append('contenido', texto);
+            
+            fetch('publish_post.php', {
+              method: 'POST',
+              body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                alert('¡Post publicado exitosamente!');
+                // Cerrar modal y recargar página para mostrar el nuevo post
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                modalInstance.hide();
+                location.reload();
+              } else {
+                alert('Error: ' + (data.error || 'Error desconocido'));
+                btn.disabled = false;
+                btn.textContent = 'Publicar ' + tipo;
+              }
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              alert('Error al publicar el post');
+              btn.disabled = false;
+              btn.textContent = 'Publicar ' + tipo;
+            });
           });
         }
       });
 
-      // Modal para ver post completo (igual que en profile.php)
+      // Modal para ver post completo
       document.querySelectorAll('.post-content-preview').forEach(function(el) {
         el.addEventListener('click', function() {
           const title = this.getAttribute('data-post-title');
           const content = this.getAttribute('data-post-content');
           if (!document.getElementById('modalVerPost')) {
             const modalHtml = `
-              <div class=\"modal fade\" id=\"modalVerPost\" tabindex=\"-1\" aria-labelledby=\"modalVerPostLabel\" aria-hidden=\"true\">
-                <div class=\"modal-dialog modal-dialog-centered\">
-                  <div class=\"modal-content bg-dark text-light border-secondary\">
-                    <div class=\"modal-header border-secondary\">
-                      <h5 class=\"modal-title\" id=\"modalVerPostLabel\">Post completo</h5>
-                      <button type=\"button\" class=\"btn-close btn-close-white\" data-bs-dismiss=\"modal\" aria-label=\"Cerrar\"></button>
+              <div class="modal fade" id="modalVerPost" tabindex="-1" aria-labelledby="modalVerPostLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                  <div class="modal-content bg-dark text-light border-secondary">
+                    <div class="modal-header border-secondary">
+                      <h5 class="modal-title" id="modalVerPostLabel">Post completo</h5>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
-                    <div class=\"modal-body\" id=\"modalVerPostBody\"></div>
+                    <div class="modal-body" id="modalVerPostBody"></div>
                   </div>
                 </div>
               </div>`;

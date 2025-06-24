@@ -1,12 +1,30 @@
 <?php
 session_start();
+require_once 'includes/db.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../index.php?expired=1");
+    header("Location: index.php?expired=1");
     exit;
 }
 
+$user_id = $_SESSION['user_id'];
 $username = htmlspecialchars($_SESSION['username']);
+
+// Obtener información del usuario incluyendo la foto de perfil
+$stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ? LIMIT 1");
+$stmt->execute([$user_id]);
+$user_info = $stmt->fetch(PDO::FETCH_ASSOC);
+$profile_picture = $user_info['profile_picture'] ?? '';
+
+// Función para obtener la URL de la imagen de perfil
+function getProfilePictureUrl($profile_picture, $username) {
+    if (!empty($profile_picture)) {
+        return 'uploads/profile_pictures/' . htmlspecialchars($profile_picture);
+    } else {
+        // Avatar por defecto usando las iniciales del username
+        return 'https://ui-avatars.com/api/?name=' . urlencode($username) . '&background=330066&color=c2a4ff&size=120';
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -21,7 +39,7 @@ $username = htmlspecialchars($_SESSION['username']);
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 
   <!-- Tus estilos -->
-  <link rel="stylesheet" href="../assets/css/styles.css" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
 
   <style>
     /* Estilos para perfil y layout normal */
@@ -29,6 +47,8 @@ $username = htmlspecialchars($_SESSION['username']);
       width: 120px;
       height: 120px;
       object-fit: cover;
+      border-radius: 50%;
+      border: 3px solid #c2a4ff;
     }
     @media (max-width: 576px) {
       .profile-avatar {
@@ -163,7 +183,7 @@ $username = htmlspecialchars($_SESSION['username']);
 </head>
 <body>
 
-<?php include '../includes/partials/navbar.php' ?>
+<?php include 'includes/partials/navbar.php' ?>
 
 <div class="container mt-4">
   <div class="row">
@@ -171,11 +191,11 @@ $username = htmlspecialchars($_SESSION['username']);
     <div class="col-12 col-md-4 mb-4">
       <div class="card text-center shadow-sm">
         <div class="card-body">
-          <img src="../assets/images/default-user.png" alt="Avatar" class="rounded-circle mb-3 profile-avatar" />
+          <img src="<?php echo getProfilePictureUrl($profile_picture, $username); ?>" alt="Avatar" class="rounded-circle mb-3 profile-avatar" />
           <h3 class="card-title mb-0"><?php echo $username; ?></h3>
           <p class="text-muted">@<?php echo strtolower($username); ?></p>
           <p class="card-text">Bienvenido a tu perfil. Aquí puedes ver tu información y tus estadísticas.</p>
-          <a href="edit_profile.php" class="btn btn-primary">Editar Perfil</a>
+          <a href="users/edit-profile.php" class="btn btn-primary">Editar Perfil</a>
         </div>
       </div>
       <div class="card mt-4 shadow-sm">
