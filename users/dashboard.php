@@ -18,7 +18,7 @@ $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
 $profile_picture = $user_info['profile_picture'] ?? '';
 
 // Obtener todos los posts ordenados por fecha descendente
-$stmt = $pdo->prepare("SELECT p.*, u.profile_picture FROM posts p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.fecha DESC LIMIT 20");
+$stmt = $pdo->prepare("SELECT p.*, u.profile_picture, u.username FROM posts p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.fecha DESC LIMIT 20");
 $stmt->execute();
 $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -228,7 +228,7 @@ function processContentForDisplay($content) {
     
     .post-type-badge {
       position: absolute;
-      top: 10px;
+      top: -15px;
       left: 10px;
       background: #330066;
       color: #c2a4ff;
@@ -236,6 +236,7 @@ function processContentForDisplay($content) {
       padding: 0.2em 0.7em;
       font-size: 0.85em;
       font-weight: bold;
+      margin-bottom: 30px;
     }
     
     .post-date {
@@ -247,10 +248,26 @@ function processContentForDisplay($content) {
     }
     
     .post-content {
-      margin-top: 2.5em;
+      margin-top: 1em;
       margin-bottom: 1em;
       white-space: pre-wrap;
       word-break: break-word;
+      text-align: center;
+      margin-left: 15%;
+      margin-right: auto;
+      width: 70%;
+    }
+    
+    .post-image-container {
+      margin-top: 15px;
+    }
+    
+    .post-image {
+      transition: transform 0.2s ease;
+    }
+    
+    .post-image:hover {
+      transform: scale(1.02);
     }
     
     /* Estilos para preview en tiempo real */
@@ -346,6 +363,61 @@ function processContentForDisplay($content) {
       </div>
     </div>
 
+    <!-- Modal para mostrar imagen de post -->
+    <div class="modal fade" id="modalImagenPost" tabindex="-1" aria-labelledby="modalImagenPostLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark text-light border-secondary">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="modalImagenPostLabel">Imagen del post</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body text-center">
+            <img id="modalImagenPostSrc" src="" alt="Imagen del post" class="modal-image">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de éxito para publicación -->
+    <div class="modal fade" id="modalPublicacionExitosa" tabindex="-1" aria-labelledby="modalPublicacionExitosaLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-secondary">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="modalPublicacionExitosaLabel">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>Post publicado
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <p>Tu post ha sido publicado exitosamente.</p>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-primary" onclick="window.location.href='dashboard.php'">Aceptar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de error para publicación -->
+    <div class="modal fade" id="modalErrorPublicacion" tabindex="-1" aria-labelledby="modalErrorPublicacionLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light border-secondary">
+          <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="modalErrorPublicacionLabel">
+              <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body" id="modalErrorPublicacionBody">
+            <p>Ha ocurrido un error al publicar el post.</p>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
    
 
     <!-- Timeline de posts publicados -->
@@ -354,7 +426,7 @@ function processContentForDisplay($content) {
         <div class="col">
           <div class="card bg-dark text-light h-100 shadow-sm border-0">
             <div class="card-body text-center">
-              <p class="text-muted">No hay publicaciones aún. ¡Sé el primero en publicar!</p>
+              <p class="text-white">No hay publicaciones aún. ¡Sé el primero en publicar!</p>
             </div>
           </div>
         </div>
@@ -376,12 +448,25 @@ function processContentForDisplay($content) {
                     <img src="<?php echo getProfilePictureUrl($post['profile_picture'], $post['username']); ?>" alt="Foto de perfil" class="profile-picture-small me-2" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($post['username']); ?>')">
                     <span class="fw-bold username-link" onclick="window.location.href='profile.php?username=<?php echo urlencode($post['username']); ?>'"><?php echo htmlspecialchars($post['username']); ?></span>
                   </div>
-                  <div class="flex-grow-1 post-content-preview" style="cursor:pointer;" data-post-title="<?php echo htmlspecialchars($post['tipo']); ?>" data-post-content="<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>">
+                  <div class="flex-grow-1 post-content-preview" style="cursor:pointer;" 
+                       data-post-id="<?php echo $post['id']; ?>"
+                       data-post-user-id="<?php echo $post['user_id']; ?>"
+                       data-post-title="<?php echo htmlspecialchars($post['tipo']); ?>" 
+                       data-post-content="<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>">
                     <div class="post-type-badge"><?php echo htmlspecialchars($post['tipo']); ?></div>
                     <div class="post-date"><?php echo date('d/m/Y', strtotime($post['fecha'])); ?></div>
                     <div class="post-content">
                       <?php echo nl2br(processContentForDisplay($post['contenido'])); ?>
                     </div>
+                    <?php if (!empty($post['imagen'])): ?>
+                      <div class="post-image-container mt-3">
+                        <img src="../uploads/post_images/<?php echo htmlspecialchars($post['imagen']); ?>" 
+                             alt="Imagen del post" 
+                             class="post-image" 
+                             style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer;"
+                             onclick="showPostImageModal(this.src, '<?php echo htmlspecialchars($post['username']); ?>')">
+                      </div>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>
@@ -389,6 +474,82 @@ function processContentForDisplay($content) {
           </div>
         <?php endforeach; ?>
       <?php endif; ?>
+    </div>
+  </div>
+
+  <!-- Modal para ver post completo -->
+  <div class="modal fade" id="modalVerPost" tabindex="-1" aria-labelledby="modalVerPostLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalVerPostLabel">Post completo</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="modalVerPostBody"></div>
+        <div class="modal-footer border-secondary" id="modalVerPostFooter">
+          <!-- El botón de eliminar se agregará dinámicamente aquí -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación para eliminar post -->
+  <div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-labelledby="modalConfirmarEliminarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalConfirmarEliminarLabel">Confirmar eliminación</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p>¿Estás seguro de que quieres eliminar este post?</p>
+          <p class="text-muted small">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="btnConfirmarEliminar">Eliminar post</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de éxito para eliminación -->
+  <div class="modal fade" id="modalEliminacionExitosa" tabindex="-1" aria-labelledby="modalEliminacionExitosaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalEliminacionExitosaLabel">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>Post eliminado
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p>El post ha sido eliminado exitosamente.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-primary" onclick="location.reload()">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de error para eliminación -->
+  <div class="modal fade" id="modalErrorEliminacion" tabindex="-1" aria-labelledby="modalErrorEliminacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalErrorEliminacionLabel">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="modalErrorEliminacionBody">
+          <p>Ha ocurrido un error al eliminar el post.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -401,6 +562,66 @@ function processContentForDisplay($content) {
       document.getElementById('modalImagenSrc').src = imageSrc;
       document.getElementById('modalImagenLabel').textContent = 'Foto de perfil de ' + username;
       modal.show();
+    }
+
+    // Función para mostrar imagen de post en modal
+    function showPostImageModal(imageSrc, username) {
+      const modal = new bootstrap.Modal(document.getElementById('modalImagenPost'));
+      document.getElementById('modalImagenPostSrc').src = imageSrc;
+      document.getElementById('modalImagenPostLabel').textContent = 'Imagen del post de ' + username;
+      modal.show();
+    }
+
+    // Variables globales para manejar la imagen seleccionada
+    let selectedImageFile = null;
+
+    // Función para manejar la selección de imagen
+    function handleImageSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validaciones de imagen
+      const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      const tamanoMaximo = 5 * 1024 * 1024; // 5MB
+
+      if (!tiposPermitidos.includes(file.type)) {
+        mostrarError('Formato de imagen no válido. Solo se permiten JPG, PNG y GIF');
+        return;
+      }
+
+      if (file.size > tamanoMaximo) {
+        mostrarError('La imagen es demasiado grande. Máximo 5MB');
+        return;
+      }
+
+      // Mostrar vista previa
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('imagePreviewSection').style.display = 'block';
+        selectedImageFile = file;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Función para remover imagen seleccionada
+    function removeSelectedImage() {
+      document.getElementById('imagePreviewSection').style.display = 'none';
+      document.getElementById('imageInput').value = '';
+      selectedImageFile = null;
+    }
+
+    // Función para mostrar error
+    function mostrarError(mensaje) {
+      document.getElementById('modalErrorPublicacionBody').innerHTML = `<p>${mensaje}</p>`;
+      const modalError = new bootstrap.Modal(document.getElementById('modalErrorPublicacion'));
+      modalError.show();
+    }
+
+    // Función para mostrar éxito
+    function mostrarExito() {
+      const modalExito = new bootstrap.Modal(document.getElementById('modalPublicacionExitosa'));
+      modalExito.show();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -465,9 +686,18 @@ function processContentForDisplay($content) {
               <div class="input-field" id="mainInputFieldModal" contenteditable="true" placeholder="Escribe tu publicación aquí..."></div>
             </div>
           </div>
+          <div class="image-preview-section" id="imagePreviewSection" style="display:none; margin-top:10px;">
+            <div class="selected-image-container" style="position:relative; display:inline-block;">
+              <img id="imagePreview" src="" alt="Vista previa" style="max-width:200px; max-height:200px; border-radius:8px;">
+              <button type="button" class="btn btn-danger btn-sm" style="position:absolute; top:5px; right:5px;" onclick="removeSelectedImage()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </div>
           <div class="toolbar">
             <div class="format-icons">
-              <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto"></i>
+              <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+              <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto" onclick="document.getElementById('imageInput').click()"></i>
               <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
               <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
               <i class="bi bi-type-strikethrough toolbar-icon" data-command="strikeThrough" title="Tachar"></i>
@@ -521,7 +751,7 @@ function processContentForDisplay($content) {
             texto = texto.trim();
             
             if (!texto) {
-              alert('El campo de entrada está vacío.');
+              mostrarError('El campo de entrada está vacío.');
               return;
             }
             
@@ -529,11 +759,17 @@ function processContentForDisplay($content) {
             btn.disabled = true;
             btn.textContent = 'Publicando...';
             
-            // Enviar datos al servidor
+            // Crear FormData para enviar texto e imagen
             const formData = new FormData();
             formData.append('tipo', tipo);
             formData.append('contenido', texto);
             
+            // Agregar imagen si se seleccionó una
+            if (selectedImageFile) {
+              formData.append('imagen', selectedImageFile);
+            }
+            
+            // Enviar datos al servidor
             fetch('publish_post.php', {
               method: 'POST',
               body: formData
@@ -541,20 +777,20 @@ function processContentForDisplay($content) {
             .then(response => response.json())
             .then(data => {
               if (data.success) {
-                alert('¡Post publicado exitosamente!');
-                // Cerrar modal y recargar página para mostrar el nuevo post
+                // Cerrar modal de publicación
                 const modalInstance = bootstrap.Modal.getInstance(modal);
                 modalInstance.hide();
-                location.reload();
+                // Mostrar modal de éxito
+                mostrarExito();
               } else {
-                alert('Error: ' + (data.error || 'Error desconocido'));
+                mostrarError(data.error || 'Error desconocido');
                 btn.disabled = false;
                 btn.textContent = 'Publicar ' + tipo;
               }
             })
             .catch(error => {
               console.error('Error:', error);
-              alert('Error al publicar el post');
+              mostrarError('Error al publicar el post');
               btn.disabled = false;
               btn.textContent = 'Publicar ' + tipo;
             });
@@ -565,8 +801,13 @@ function processContentForDisplay($content) {
       // Modal para ver post completo
       document.querySelectorAll('.post-content-preview').forEach(function(el) {
         el.addEventListener('click', function() {
+          const postId = this.getAttribute('data-post-id');
+          const postUserId = this.getAttribute('data-post-user-id');
+          const currentUserId = '<?php echo $user_id; ?>';
           const title = this.getAttribute('data-post-title');
           const content = this.getAttribute('data-post-content');
+          const postImage = this.querySelector('.post-image');
+          
           if (!document.getElementById('modalVerPost')) {
             const modalHtml = `
               <div class="modal fade" id="modalVerPost" tabindex="-1" aria-labelledby="modalVerPostLabel" aria-hidden="true">
@@ -577,17 +818,92 @@ function processContentForDisplay($content) {
                       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body" id="modalVerPostBody"></div>
+                    <div class="modal-footer border-secondary" id="modalVerPostFooter">
+                      <!-- El botón de eliminar se agregará dinámicamente aquí -->
+                    </div>
                   </div>
                 </div>
               </div>`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
           }
+          
+          let modalContent = `<p>${content}</p>`;
+          if (postImage) {
+            modalContent += `<div class="text-center mt-3">
+              <img src="${postImage.src}" alt="Imagen del post" style="max-width: 100%; max-height: 400px; border-radius: 8px; cursor: pointer;" onclick="showPostImageModal('${postImage.src}', '${title}')">
+            </div>`;
+          }
+          
           document.getElementById('modalVerPostLabel').textContent = title;
-          document.getElementById('modalVerPostBody').innerHTML = `<p>${content}</p>`;
+          document.getElementById('modalVerPostBody').innerHTML = modalContent;
+          
+          // Mostrar botón de eliminar solo si el post pertenece al usuario actual
+          const footer = document.getElementById('modalVerPostFooter');
+          if (postUserId === currentUserId) {
+            footer.innerHTML = `
+              <button type="button" class="btn btn-danger" onclick="confirmarEliminarPost(${postId})">
+                <i class="bi bi-trash me-2"></i>Eliminar post
+              </button>
+            `;
+          } else {
+            footer.innerHTML = '';
+          }
+          
           const modal = new bootstrap.Modal(document.getElementById('modalVerPost'));
           modal.show();
         });
       });
+
+      // Función para confirmar eliminación de post
+      window.confirmarEliminarPost = function(postId) {
+        // Cerrar modal de post
+        const modalPost = bootstrap.Modal.getInstance(document.getElementById('modalVerPost'));
+        modalPost.hide();
+        
+        // Mostrar modal de confirmación
+        const modalConfirmar = new bootstrap.Modal(document.getElementById('modalConfirmarEliminar'));
+        modalConfirmar.show();
+        
+        // Configurar botón de confirmar
+        document.getElementById('btnConfirmarEliminar').onclick = function() {
+          eliminarPost(postId);
+        };
+      };
+
+      // Función para eliminar post
+      function eliminarPost(postId) {
+        // Cerrar modal de confirmación
+        const modalConfirmar = bootstrap.Modal.getInstance(document.getElementById('modalConfirmarEliminar'));
+        modalConfirmar.hide();
+        
+        // Enviar petición de eliminación
+        fetch('delete_post.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: 'post_id=' + postId
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Mostrar modal de éxito
+            const modalExito = new bootstrap.Modal(document.getElementById('modalEliminacionExitosa'));
+            modalExito.show();
+          } else {
+            // Mostrar modal de error
+            document.getElementById('modalErrorEliminacionBody').innerHTML = `<p>${data.error || 'Error desconocido'}</p>`;
+            const modalError = new bootstrap.Modal(document.getElementById('modalErrorEliminacion'));
+            modalError.show();
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          document.getElementById('modalErrorEliminacionBody').innerHTML = '<p>Error al eliminar el post</p>';
+          const modalError = new bootstrap.Modal(document.getElementById('modalErrorEliminacion'));
+          modalError.show();
+        });
+      }
     });
   </script>
 </body>

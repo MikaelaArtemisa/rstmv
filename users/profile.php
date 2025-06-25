@@ -236,6 +236,7 @@ function processContentForDisplay($content) {
       padding: 0.2em 0.7em;
       font-size: 0.85em;
       font-weight: bold;
+      margin-bottom: 1px;
     }
     .insta-post-date {
       position: absolute;
@@ -253,6 +254,12 @@ function processContentForDisplay($content) {
       word-break: break-word;
       width: 100%;
       white-space: pre-wrap;
+    }
+    .insta-post-image {
+      transition: transform 0.2s ease;
+    }
+    .insta-post-image:hover {
+      transform: scale(1.02);
     }
     @media (max-width: 600px) {
       .insta-profile-header {
@@ -459,31 +466,6 @@ function processContentForDisplay($content) {
     </div>
   </div>
 
-  <!-- Grid de posts ficticios tipo timeline dashboard (en pequeño) -->
-  <div class="explora-section mb-4">
-    <h3 class="mb-2 text-center" style="color:#c2a4ff; font-size:1.1rem;">Explora publicaciones</h3>
-    <div class="insta-gallery mini-fake-posts compact-gallery">
-      <?php for ($i = 1; $i <= 6; $i++): ?>
-        <div class="insta-post-card mini-post-card">
-          <div class="insta-post-type">FICTICIO</div>
-          <div class="insta-post-date"><?php echo date('d/m/Y', strtotime("-{$i} days")); ?></div>
-          <div class="insta-post-content" style="font-size:0.95em;">
-            <div class="d-flex align-items-center mb-2 justify-content-center gap-2">
-              <div class="dashboard-img-circle" style="width:24px; height:24px; font-size:0.9rem; line-height:24px; background:#330066; color:#c2a4ff; display:inline-flex; align-items:center; justify-content:center;">U</div>
-              <span class="fw-bold" style="color:#c2a4ff; font-size:0.95em;">UsuarioDemo<?php echo $i; ?></span>
-            </div>
-            <div style="font-size:0.92em;">Este es un post ficticio de ejemplo para el timeline.</div>
-            <div class="d-flex justify-content-center gap-2 mt-2" style="font-size:0.9em;">
-              <span title="Fama"><i class="bi bi-heart-fill" style="color:#e25555;"></i> 100</span>
-              <span title="Conf. Pública"><i class="bi bi-emoji-smile-fill" style="color:#ffc107;"></i> 50</span>
-              <span title="Conf. Anónima"><i class="bi bi-emoji-neutral-fill" style="color:#6c757d;"></i> 25</span>
-            </div>
-          </div>
-        </div>
-      <?php endfor; ?>
-    </div>
-  </div>
-
   <!-- Galería de publicaciones tipo Instagram -->
   <div class="insta-gallery mb-5 compact-gallery">
     <?php if (empty($posts)): ?>
@@ -497,10 +479,19 @@ function processContentForDisplay($content) {
       </div>
     <?php else: ?>
       <?php foreach (array_slice($posts, 0, 9) as $post): ?>
-        <div class="insta-post-card" onclick="showPostModal('<?php echo htmlspecialchars($post['tipo']); ?>', '<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>', '<?php echo date('d/m/Y H:i', strtotime($post['fecha'])); ?>')">
+        <div class="insta-post-card" onclick="showPostModal('<?php echo htmlspecialchars($post['tipo']); ?>', '<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>', '<?php echo date('d/m/Y H:i', strtotime($post['fecha'])); ?>', '<?php echo $post['id']; ?>')">
           <div class="insta-post-type"><?php echo htmlspecialchars($post['tipo']); ?></div>
           <div class="insta-post-date"><?php echo date('d/m/Y', strtotime($post['fecha'])); ?></div>
-          <div class="insta-post-content"><?php echo nl2br(processContentForDisplay(substr($post['contenido'], 0, 100))); ?><?php echo strlen($post['contenido']) > 100 ? '...' : ''; ?></div>
+          <?php if (!empty($post['imagen'])): ?>
+            <div class="insta-post-image" style="width: 100%; height: 60%; margin-bottom: 10px;">
+              <img src="../uploads/post_images/<?php echo htmlspecialchars($post['imagen']); ?>" 
+                   alt="Imagen del post" 
+                   style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+            </div>
+          <?php endif; ?>
+          <div class="insta-post-content" style="<?php echo !empty($post['imagen']) ? 'margin-top: 0;' : 'margin-top: 2.5em;'; ?>">
+            <?php echo nl2br(processContentForDisplay(substr($post['contenido'], 0, 100))); ?><?php echo strlen($post['contenido']) > 100 ? '...' : ''; ?>
+          </div>
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
@@ -537,6 +528,21 @@ function processContentForDisplay($content) {
     </div>
   </div>
 
+  <!-- Modal para mostrar imagen de post -->
+  <div class="modal fade" id="modalImagenPost" tabindex="-1" aria-labelledby="modalImagenPostLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalImagenPostLabel">Imagen del post</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="modalImagenPostSrc" src="" alt="Imagen del post" class="modal-image">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal para ver post completo (igual que en dashboard.php) -->
   <div class="modal fade" id="modalVerPost" tabindex="-1" aria-labelledby="modalVerPostLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -546,6 +552,109 @@ function processContentForDisplay($content) {
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body" id="modalVerPostBody"></div>
+        <div class="modal-footer border-secondary" id="modalVerPostFooter">
+          <!-- El botón de eliminar se agregará dinámicamente aquí -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación para eliminar post -->
+  <div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-labelledby="modalConfirmarEliminarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalConfirmarEliminarLabel">Confirmar eliminación</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p>¿Estás seguro de que quieres eliminar este post?</p>
+          <p class="text-muted small">Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="btnConfirmarEliminar">Eliminar post</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de éxito para confirmar eliminación -->
+  <div class="modal fade" id="modalEliminacionExitosa" tabindex="-1" aria-labelledby="modalEliminacionExitosaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalEliminacionExitosaLabel">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>Post eliminado
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p>El post ha sido eliminado exitosamente.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-primary" onclick="location.reload()">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de error para eliminación -->
+  <div class="modal fade" id="modalErrorEliminacion" tabindex="-1" aria-labelledby="modalErrorEliminacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalErrorEliminacionLabel">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="modalErrorEliminacionBody">
+          <p>Ha ocurrido un error al eliminar el post.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de éxito para publicación -->
+  <div class="modal fade" id="modalPublicacionExitosa" tabindex="-1" aria-labelledby="modalPublicacionExitosaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalPublicacionExitosaLabel">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>Post publicado
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p>Tu post ha sido publicado exitosamente.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-primary" onclick="window.location.href='dashboard.php'">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de error para publicación -->
+  <div class="modal fade" id="modalErrorPublicacion" tabindex="-1" aria-labelledby="modalErrorPublicacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="modalErrorPublicacionLabel">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="modalErrorPublicacionBody">
+          <p>Ha ocurrido un error al publicar el post.</p>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -560,12 +669,156 @@ function processContentForDisplay($content) {
       modal.show();
     }
 
+    // Función para mostrar imagen de post en modal
+    function showPostImageModal(imageSrc, username) {
+      const modal = new bootstrap.Modal(document.getElementById('modalImagenPost'));
+      document.getElementById('modalImagenPostSrc').src = imageSrc;
+      document.getElementById('modalImagenPostLabel').textContent = 'Imagen del post de ' + username;
+      modal.show();
+    }
+
     // Función para mostrar post completo en modal (igual que en dashboard.php)
-    function showPostModal(tipo, contenido, fecha) {
+    function showPostModal(tipo, contenido, fecha, postId = null) {
       const modal = new bootstrap.Modal(document.getElementById('modalVerPost'));
       document.getElementById('modalVerPostLabel').textContent = tipo;
-      document.getElementById('modalVerPostBody').innerHTML = `<p>${contenido}</p>`;
+      
+      // Buscar la imagen del post en el elemento clickeado
+      const clickedElement = event.currentTarget;
+      const postImage = clickedElement.querySelector('.insta-post-image img');
+      
+      let modalContent = `<p>${contenido}</p>`;
+      if (postImage) {
+        modalContent += `<div class="text-center mt-3">
+          <img src="${postImage.src}" alt="Imagen del post" style="max-width: 100%; max-height: 400px; border-radius: 8px; cursor: pointer;" onclick="showPostImageModal('${postImage.src}', '${tipo}')">
+        </div>`;
+      }
+      
+      document.getElementById('modalVerPostBody').innerHTML = modalContent;
+      
+      // Agregar botón de eliminar solo si es el perfil propio y se proporciona postId
+      const footer = document.getElementById('modalVerPostFooter');
+      if (<?php echo $is_own_profile ? 'true' : 'false'; ?> && postId) {
+        footer.innerHTML = `
+          <button type="button" class="btn btn-danger btn-sm" onclick="confirmarEliminarPost(${postId})">
+            <i class="bi bi-trash"></i> Eliminar post
+          </button>
+        `;
+      } else {
+        footer.innerHTML = '';
+      }
+      
       modal.show();
+    }
+
+    // Variables globales para manejar la imagen seleccionada
+    let selectedImageFile = null;
+
+    // Función para manejar la selección de imagen
+    function handleImageSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validaciones de imagen
+      const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      const tamanoMaximo = 5 * 1024 * 1024; // 5MB
+
+      if (!tiposPermitidos.includes(file.type)) {
+        mostrarError('Formato de imagen no válido. Solo se permiten JPG, PNG y GIF');
+        return;
+      }
+
+      if (file.size > tamanoMaximo) {
+        mostrarError('La imagen es demasiado grande. Máximo 5MB');
+        return;
+      }
+
+      // Mostrar vista previa
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('imagePreviewSection').style.display = 'block';
+        selectedImageFile = file;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Función para remover imagen seleccionada
+    function removeSelectedImage() {
+      document.getElementById('imagePreviewSection').style.display = 'none';
+      document.getElementById('imageInput').value = '';
+      selectedImageFile = null;
+    }
+
+    // Función para mostrar error
+    function mostrarError(mensaje) {
+      document.getElementById('modalErrorPublicacionBody').innerHTML = `<p>${mensaje}</p>`;
+      const modalError = new bootstrap.Modal(document.getElementById('modalErrorPublicacion'));
+      modalError.show();
+    }
+
+    // Función para mostrar éxito
+    function mostrarExito() {
+      const modalExito = new bootstrap.Modal(document.getElementById('modalPublicacionExitosa'));
+      modalExito.show();
+    }
+
+    // Función para confirmar eliminación de post
+    function confirmarEliminarPost(postId) {
+      // Cerrar el modal del post
+      const modalPost = bootstrap.Modal.getInstance(document.getElementById('modalVerPost'));
+      modalPost.hide();
+      
+      // Mostrar modal de confirmación
+      const modalConfirmar = new bootstrap.Modal(document.getElementById('modalConfirmarEliminar'));
+      modalConfirmar.show();
+      
+      // Configurar el botón de confirmar
+      document.getElementById('btnConfirmarEliminar').onclick = function() {
+        eliminarPost(postId);
+      };
+    }
+
+    // Función para eliminar el post
+    function eliminarPost(postId) {
+      const btnConfirmar = document.getElementById('btnConfirmarEliminar');
+      btnConfirmar.disabled = true;
+      btnConfirmar.textContent = 'Eliminando...';
+      
+      // Enviar solicitud de eliminación
+      const formData = new FormData();
+      formData.append('post_id', postId);
+      
+      fetch('delete_post.php', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Cerrar modal de confirmación
+          const modalConfirmar = bootstrap.Modal.getInstance(document.getElementById('modalConfirmarEliminar'));
+          modalConfirmar.hide();
+          // Mostrar modal de éxito
+          const modalExitosa = new bootstrap.Modal(document.getElementById('modalEliminacionExitosa'));
+          modalExitosa.show();
+        } else {
+          // Mostrar modal de error
+          document.getElementById('modalErrorEliminacionBody').innerHTML = `<p>Error: ${data.error || 'Error al eliminar el post'}</p>`;
+          const modalError = new bootstrap.Modal(document.getElementById('modalErrorEliminacion'));
+          modalError.show();
+          btnConfirmar.disabled = false;
+          btnConfirmar.textContent = 'Eliminar post';
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        // Mostrar modal de error
+        document.getElementById('modalErrorEliminacionBody').innerHTML = '<p>Error al eliminar el post. Por favor, inténtalo de nuevo.</p>';
+        const modalError = new bootstrap.Modal(document.getElementById('modalErrorEliminacion'));
+        modalError.show();
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = 'Eliminar post';
+      });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -581,9 +834,18 @@ function processContentForDisplay($content) {
               <div class="input-field" id="mainInputFieldModal" contenteditable="true" placeholder="Escribe tu publicación aquí..."></div>
             </div>
           </div>
+          <div class="image-preview-section" id="imagePreviewSection" style="display:none; margin-top:10px;">
+            <div class="selected-image-container" style="position:relative; display:inline-block;">
+              <img id="imagePreview" src="" alt="Vista previa" style="max-width:200px; max-height:200px; border-radius:8px;">
+              <button type="button" class="btn btn-danger btn-sm" style="position:absolute; top:5px; right:5px;" onclick="removeSelectedImage()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </div>
           <div class="toolbar">
             <div class="format-icons">
-              <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto"></i>
+              <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+              <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto" onclick="document.getElementById('imageInput').click()"></i>
               <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
               <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
               <i class="bi bi-type-strikethrough toolbar-icon" data-command="strikeThrough" title="Tachar"></i>
@@ -637,7 +899,7 @@ function processContentForDisplay($content) {
             texto = texto.trim();
             
             if (!texto) {
-              alert('El campo de entrada está vacío.');
+              mostrarError('El campo de entrada está vacío.');
               return;
             }
             
@@ -645,11 +907,17 @@ function processContentForDisplay($content) {
             btn.disabled = true;
             btn.textContent = 'Publicando...';
             
-            // Enviar datos al servidor
+            // Crear FormData para enviar texto e imagen
             const formData = new FormData();
             formData.append('tipo', tipo);
             formData.append('contenido', texto);
             
+            // Agregar imagen si se seleccionó una
+            if (selectedImageFile) {
+              formData.append('imagen', selectedImageFile);
+            }
+            
+            // Enviar datos al servidor
             fetch('publish_post.php', {
               method: 'POST',
               body: formData
@@ -657,20 +925,20 @@ function processContentForDisplay($content) {
             .then(response => response.json())
             .then(data => {
               if (data.success) {
-                alert('¡Post publicado exitosamente!');
-                // Cerrar modal y recargar página para mostrar el nuevo post
+                // Cerrar modal de publicación
                 const modalInstance = bootstrap.Modal.getInstance(modal);
                 modalInstance.hide();
-                location.reload();
+                // Mostrar modal de éxito
+                mostrarExito();
               } else {
-                alert('Error: ' + (data.error || 'Error desconocido'));
+                mostrarError(data.error || 'Error desconocido');
                 btn.disabled = false;
                 btn.textContent = 'Publicar ' + tipo;
               }
             })
             .catch(error => {
               console.error('Error:', error);
-              alert('Error al publicar el post');
+              mostrarError('Error al publicar el post');
               btn.disabled = false;
               btn.textContent = 'Publicar ' + tipo;
             });
