@@ -1,9 +1,9 @@
 <?php
 // Configuración de la base de datos
-$host = 'localhost';
-$db   = 'webecap'; // Cambia esto por el nombre real de tu base de datos
-$user = 'root'; // Cambia si tu usuario es distinto
-$pass = ''; // Cambia si tu contraseña no está vacía
+$host = 'sql301.infinityfree.com';
+$db   = 'if0_39274452_inacx'; // Cambia esto por el nombre real de tu base de datos
+$user = 'if0_39274452'; // Cambia si tu usuario es distinto
+$pass = 'inacx123'; // Cambia si tu contraseña no está vacía
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";

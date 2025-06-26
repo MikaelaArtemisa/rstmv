@@ -237,14 +237,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  accept="image/jpeg,image/jpg,image/png,image/gif"
                  onchange="previewImage(this);">
           <div class="mt-2">
-            <small class="text-muted">Haz clic en la imagen para cambiar. Máximo 5MB. Formatos: JPG, PNG, GIF</small>
+            <small class="text-white">Haz clic en la imagen para cambiar. Máximo 5MB. Formatos: JPG, PNG, GIF</small>
           </div>
         </div>
         
         <div class="mb-3">
-          <label for="username" class="form-label">Usuario</label>
+          <label for="username" class="form-label text-white">Usuario</label>
           <input type="text" class="form-control bg-dark text-light border-secondary" id="username" value="<?php echo htmlspecialchars($current_username); ?>" readonly disabled>
-          <small class="text-muted">El nombre de usuario no se puede editar</small>
+          <small class="text-white">El nombre de usuario no se puede editar</small>
         </div>
         <div class="mb-3">
           <label for="desc" class="form-label">Biografía</label>

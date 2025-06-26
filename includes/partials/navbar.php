@@ -14,7 +14,6 @@
       </a>
       <ul class="dropdown-menu text-start">
         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalPublicar" data-tipo="POST">POST</a></li>
-        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalPublicar" data-tipo="CONFESIÓN PUBLICA">Confesión Pública</a></li>
         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#modalPublicar" data-tipo="CONFESIÓN ANONIMA">Confesión Anónima</a></li>
       </ul>
     </div>

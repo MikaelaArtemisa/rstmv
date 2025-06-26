@@ -11,16 +11,93 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $username = htmlspecialchars($_SESSION['username']);
 
+// Crear tabla post_votes si no existe
+try {
+    $createTableSQL = "
+    CREATE TABLE IF NOT EXISTS post_votes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        user_id INT NOT NULL,
+        vote_type ENUM('like', 'dislike', 'fama') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_vote (post_id, user_id, vote_type),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $pdo->exec($createTableSQL);
+    
+    // Crear índices si no existen
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_post_id ON post_votes(post_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_user_id ON post_votes(user_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_type ON post_votes(vote_type)");
+} catch (PDOException $e) {
+    // Si hay error al crear la tabla, continuar sin votos
+    error_log("Error creando tabla post_votes: " . $e->getMessage());
+}
+
+// Agregar campo famas a la tabla users si no existe
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS famas INT DEFAULT 0");
+} catch (PDOException $e) {
+    // Si hay error, continuar sin el campo famas
+    error_log("Error agregando campo famas: " . $e->getMessage());
+}
+
 // Obtener información del usuario incluyendo la foto de perfil
 $stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ? LIMIT 1");
 $stmt->execute([$user_id]);
 $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
 $profile_picture = $user_info['profile_picture'] ?? '';
 
-// Obtener todos los posts ordenados por fecha descendente
-$stmt = $pdo->prepare("SELECT p.*, u.profile_picture, u.username FROM posts p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.fecha DESC LIMIT 20");
-$stmt->execute();
-$posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Obtener todos los posts ordenados por fecha descendente con conteos de votos
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.*, u.profile_picture, u.username,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'like' THEN 1 ELSE 0 END), 0) as likes_count,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'dislike' THEN 1 ELSE 0 END), 0) as dislikes_count,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'fama' THEN 1 ELSE 0 END), 0) as famas_count
+        FROM posts p 
+        LEFT JOIN users u ON p.user_id = u.id 
+        LEFT JOIN post_votes pv ON p.id = pv.post_id
+        GROUP BY p.id, p.user_id, p.tipo, p.contenido, p.imagen, p.fecha, u.profile_picture, u.username
+        ORDER BY p.fecha DESC 
+        LIMIT 20
+    ");
+    $stmt->execute();
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    // Si hay error, usar consulta simple sin votos
+    $stmt = $pdo->prepare("SELECT p.*, u.profile_picture, u.username FROM posts p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.fecha DESC LIMIT 20");
+    $stmt->execute();
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Agregar conteos de votos como 0 por defecto
+    foreach ($posts as &$post) {
+        $post['likes_count'] = 0;
+        $post['dislikes_count'] = 0;
+        $post['famas_count'] = 0;
+    }
+}
+
+// Obtener votos del usuario actual para marcar botones como votados
+$user_votes = [];
+try {
+    $stmt = $pdo->prepare("SELECT post_id, vote_type FROM post_votes WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $user_votes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    // Si hay error, continuar sin votos del usuario
+    error_log("Error obteniendo votos del usuario: " . $e->getMessage());
+}
+
+// Crear array de votos del usuario para JavaScript
+$user_votes_js = [];
+foreach ($user_votes as $vote) {
+    $user_votes_js[] = [
+        'post_id' => $vote['post_id'],
+        'vote_type' => $vote['vote_type']
+    ];
+}
 
 // Función para obtener la URL de la imagen de perfil
 function getProfilePictureUrl($profile_picture, $username) {
@@ -69,6 +146,91 @@ function processContentForDisplay($content) {
     $content = preg_replace('/~~(.*?)~~/s', '<s>$1</s>', $content);
     
     return $content;
+}
+
+// Procesar votos si se recibe una petición POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'vote') {
+    header('Content-Type: application/json');
+    
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'error' => 'No autenticado']);
+        exit;
+    }
+    
+    $user_id = $_SESSION['user_id'];
+    $post_id = intval($_POST['post_id'] ?? 0);
+    $vote_type = $_POST['vote_type'] ?? '';
+    
+    // Validar tipo de voto
+    if (!in_array($vote_type, ['like', 'dislike', 'fama'])) {
+        echo json_encode(['success' => false, 'error' => 'Tipo de voto inválido']);
+        exit;
+    }
+    
+    try {
+        // Verificar que el post existe
+        $stmt = $pdo->prepare("SELECT id FROM posts WHERE id = ?");
+        $stmt->execute([$post_id]);
+        if (!$stmt->fetch()) {
+            echo json_encode(['success' => false, 'error' => 'Post no encontrado']);
+            exit;
+        }
+        
+        // Verificar si el usuario ya votó este tipo en este post
+        $stmt = $pdo->prepare("SELECT id FROM post_votes WHERE post_id = ? AND user_id = ? AND vote_type = ?");
+        $stmt->execute([$post_id, $user_id, $vote_type]);
+        $existing_vote = $stmt->fetch();
+        
+        if ($existing_vote) {
+            // Si ya votó, no permitir votar de nuevo (botón bloqueado)
+            echo json_encode(['success' => false, 'error' => 'Ya has votado este tipo']);
+            exit;
+        } else {
+            // Si no ha votado, agregar el voto
+            $stmt = $pdo->prepare("INSERT INTO post_votes (post_id, user_id, vote_type) VALUES (?, ?, ?)");
+            $stmt->execute([$post_id, $user_id, $vote_type]);
+            
+            // Si es un voto de fama, actualizar el contador de famas del usuario del post
+            if ($vote_type === 'fama') {
+                // Obtener el user_id del post
+                $stmt = $pdo->prepare("SELECT user_id FROM posts WHERE id = ?");
+                $stmt->execute([$post_id]);
+                $post_user = $stmt->fetch();
+                
+                if ($post_user && $post_user['user_id'] != $user_id) { // No votarse a sí mismo
+                    // Actualizar famas del usuario del post
+                    $stmt = $pdo->prepare("UPDATE users SET famas = famas + 1 WHERE id = ?");
+                    $stmt->execute([$post_user['user_id']]);
+                }
+            }
+        }
+        
+        // Obtener conteos actualizados
+        $stmt = $pdo->prepare("
+            SELECT 
+                SUM(CASE WHEN vote_type = 'like' THEN 1 ELSE 0 END) as likes,
+                SUM(CASE WHEN vote_type = 'dislike' THEN 1 ELSE 0 END) as dislikes,
+                SUM(CASE WHEN vote_type = 'fama' THEN 1 ELSE 0 END) as famas
+            FROM post_votes 
+            WHERE post_id = ?
+        ");
+        $stmt->execute([$post_id]);
+        $counts = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        echo json_encode([
+            'success' => true,
+            'counts' => [
+                'likes' => intval($counts['likes'] ?? 0),
+                'dislikes' => intval($counts['dislikes'] ?? 0),
+                'famas' => intval($counts['famas'] ?? 0)
+            ]
+        ]);
+        
+    } catch (PDOException $e) {
+        error_log("Error en votación: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor']);
+    }
+    exit;
 }
 ?>
 
@@ -164,11 +326,13 @@ function processContentForDisplay($content) {
       font-size: 1em;
       color: #e0e0e0;
       resize: none;
-      padding: 0;
+      padding: 10px;
       margin: 0;
       font-family: sans-serif;
       box-sizing: border-box;
       background-color: transparent;
+      min-height: 120px;
+      cursor: text;
     }
     
     .publish-form .input-field::placeholder {
@@ -252,10 +416,10 @@ function processContentForDisplay($content) {
       margin-bottom: 1em;
       white-space: pre-wrap;
       word-break: break-word;
-      text-align: center;
-      margin-left: 15%;
-      margin-right: auto;
-      width: 70%;
+      text-align: left;
+      width: 100%;
+      padding-left: 10px;
+      padding-right: 10px;
     }
     
     .post-image-container {
@@ -317,6 +481,44 @@ function processContentForDisplay($content) {
     .preview-content s, .preview-content strike {
       text-decoration: line-through;
       color: #888;
+    }
+    
+    .dashboard-img-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #330066;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2em;
+      transition: all 0.3s ease;
+      border: 2px solid #6a0dad;
+    }
+    
+    .dashboard-img-circle.vote-btn {
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .dashboard-img-circle.vote-btn:hover {
+      transform: scale(1.1);
+      filter: brightness(1.2);
+    }
+    
+    .dashboard-img-circle.vote-btn.voted {
+      opacity: 0.7;
+      pointer-events: none;
+      cursor: not-allowed;
+      filter: brightness(1.3);
+      transform: scale(1.1);
+      border-color: #28a745;
+    }
+    
+    .dashboard-img-circle.vote-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: not-allowed;
     }
   </style>
 </head>
@@ -436,17 +638,24 @@ function processContentForDisplay($content) {
             <div class="card bg-dark text-light h-100 shadow-sm border-0">
               <div class="card-body d-flex flex-row align-items-stretch gap-3">
                 <div class="dashboard-img-sidebar d-flex flex-column justify-content-center align-items-center gap-2 flex-shrink-0" style="min-width:48px;">
-                  <div class="dashboard-img-circle">❤️​</div>
-                  <span class="dashboard-bottom-username-text">[100]</span>
-                  <div class="dashboard-img-circle">☠️​</div>
-                  <span class="dashboard-bottom-username-text">[100]</span>
-                  <div class="dashboard-img-circle">💢​</div>
-                  <span class="dashboard-bottom-username-text">[100]</span>
+                  <div class="dashboard-img-circle vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="like" style="cursor: pointer;">❤️​</div>
+                  <span class="dashboard-bottom-username-text vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="like">[<?php echo $post['likes_count']; ?>]</span>
+                  <div class="dashboard-img-circle vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="dislike" style="cursor: pointer;">☠️​</div>
+                  <span class="dashboard-bottom-username-text vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="dislike">[<?php echo $post['dislikes_count']; ?>]</span>
+                  <div class="dashboard-img-circle vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="fama" style="cursor: pointer;">💎​​</div>
+                  <span class="dashboard-bottom-username-text vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="fama">[<?php echo $post['famas_count']; ?>]</span>
                 </div>
                 <div class="flex-grow-1 d-flex flex-column">
                   <div class="d-flex align-items-center mb-2">
-                    <img src="<?php echo getProfilePictureUrl($post['profile_picture'], $post['username']); ?>" alt="Foto de perfil" class="profile-picture-small me-2" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($post['username']); ?>')">
-                    <span class="fw-bold username-link" onclick="window.location.href='profile.php?username=<?php echo urlencode($post['username']); ?>'"><?php echo htmlspecialchars($post['username']); ?></span>
+                    <?php if ($post['tipo'] === 'CONFESIÓN ANONIMA'): ?>
+                      <img src="https://ui-avatars.com/api/?name=Anónimo&background=330066&color=c2a4ff&size=40" alt="Anónimo" class="profile-picture-small me-2">
+                      <span class="fw-bold username-link">Anónimo</span>
+                    <?php else: ?>
+                      <img src="<?php echo getProfilePictureUrl($post['profile_picture'], $post['username']); ?>" alt="Foto de perfil" class="profile-picture-small me-2" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($post['username']); ?>')">
+                      <span class="fw-bold username-link" onclick="window.location.href='profile.php?username=<?php echo urlencode($post['username']); ?>'">
+                        <?php echo htmlspecialchars($post['username']); ?>
+                      </span>
+                    <?php endif; ?>
                   </div>
                   <div class="flex-grow-1 post-content-preview" style="cursor:pointer;" 
                        data-post-id="<?php echo $post['id']; ?>"
@@ -455,7 +664,7 @@ function processContentForDisplay($content) {
                        data-post-content="<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>">
                     <div class="post-type-badge"><?php echo htmlspecialchars($post['tipo']); ?></div>
                     <div class="post-date"><?php echo date('d/m/Y', strtotime($post['fecha'])); ?></div>
-                    <div class="post-content">
+                    <div class="post-content" style="text-align: left;">
                       <?php echo nl2br(processContentForDisplay($post['contenido'])); ?>
                     </div>
                     <?php if (!empty($post['imagen'])): ?>
@@ -580,12 +789,23 @@ function processContentForDisplay($content) {
       const file = event.target.files[0];
       if (!file) return;
 
-      // Validaciones de imagen
-      const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      // Validaciones de imagen - incluir formatos de celulares
+      const tiposPermitidos = [
+        'image/jpeg', 
+        'image/jpg', 
+        'image/png', 
+        'image/gif',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'image/bmp',
+        'image/tiff',
+        'image/tif'
+      ];
       const tamanoMaximo = 5 * 1024 * 1024; // 5MB
 
       if (!tiposPermitidos.includes(file.type)) {
-        mostrarError('Formato de imagen no válido. Solo se permiten JPG, PNG y GIF');
+        mostrarError('Formato de imagen no válido. Formatos permitidos: JPG, PNG, GIF, WebP, HEIC, BMP, TIFF');
         return;
       }
 
@@ -594,14 +814,67 @@ function processContentForDisplay($content) {
         return;
       }
 
-      // Mostrar vista previa
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        document.getElementById('imagePreview').src = e.target.result;
-        document.getElementById('imagePreviewSection').style.display = 'block';
-        selectedImageFile = file;
+      // Comprimir imagen antes de mostrar vista previa
+      comprimirImagen(file, function(compressedFile) {
+        // Mostrar vista previa con la imagen comprimida
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('imagePreview').src = e.target.result;
+          document.getElementById('imagePreviewSection').style.display = 'block';
+          selectedImageFile = compressedFile;
+        };
+        reader.readAsDataURL(compressedFile);
+      });
+    }
+
+    // Función para comprimir imagen
+    function comprimirImagen(file, callback) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = function() {
+        // Calcular nuevas dimensiones manteniendo proporción
+        let { width, height } = img;
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
+        
+        // Configurar canvas
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Dibujar imagen redimensionada
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir a blob con compresión
+        canvas.toBlob(function(blob) {
+          // Crear nuevo archivo con el blob comprimido
+          const compressedFile = new File([blob], file.name, {
+            type: file.type,
+            lastModified: Date.now()
+          });
+          
+          // Verificar si la compresión fue efectiva
+          if (compressedFile.size >= file.size) {
+            // Si no se comprimió, usar el archivo original
+            callback(file);
+          } else {
+            console.log(`Imagen comprimida: ${file.size} -> ${compressedFile.size} bytes (${Math.round((1 - compressedFile.size/file.size) * 100)}% reducción)`);
+            callback(compressedFile);
+          }
+        }, file.type, 0.8); // Calidad 0.8 (80%)
       };
-      reader.readAsDataURL(file);
+      
+      img.src = URL.createObjectURL(file);
     }
 
     // Función para remover imagen seleccionada
@@ -625,6 +898,38 @@ function processContentForDisplay($content) {
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+      // Escuchar cambios de famas desde otras páginas
+      window.addEventListener('storage', function(e) {
+        if (e.key === 'fama_update') {
+          const famaUpdate = JSON.parse(e.newValue);
+          if (famaUpdate && famaUpdate.type === 'fama_update') {
+            console.log('Famas actualizado desde otra página:', famaUpdate);
+            // Aquí podrías actualizar algún contador global si es necesario
+          }
+        }
+      });
+      
+      // Escuchar eventos personalizados
+      window.addEventListener('famaUpdated', function(e) {
+        console.log('Evento famaUpdated recibido:', e.detail);
+        // Aquí podrías actualizar algún contador global si es necesario
+      });
+
+      // Marcar botones ya votados por el usuario
+      const userVotes = <?php echo json_encode($user_votes_js); ?>;
+      userVotes.forEach(vote => {
+        const button = document.querySelector(`[data-post-id="${vote.post_id}"][data-vote-type="${vote.vote_type}"]`);
+        if (button) {
+          button.classList.add('voted');
+          button.style.opacity = '0.7';
+          button.style.pointerEvents = 'none';
+          button.style.cursor = 'not-allowed';
+          button.style.filter = 'brightness(1.3)';
+          button.style.transform = 'scale(1.1)';
+          button.style.borderColor = '#28a745';
+        }
+      });
+
       const mainInputField = document.getElementById('mainInputField');
       const toolbarIcons = document.querySelectorAll('.dashboard-toolbar-icon[data-command]');
       const publishButton = document.getElementById('publishButton');
@@ -696,7 +1001,7 @@ function processContentForDisplay($content) {
           </div>
           <div class="toolbar">
             <div class="format-icons">
-              <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+              <input type="file" id="imageInput" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/heic,image/heif,image/bmp,image/tiff,image/tif" style="display:none;" onchange="handleImageSelect(event)">
               <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto" onclick="document.getElementById('imageInput').click()"></i>
               <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
               <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
@@ -827,7 +1132,7 @@ function processContentForDisplay($content) {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
           }
           
-          let modalContent = `<p>${content}</p>`;
+          let modalContent = `<p style="text-align: left;">${content}</p>`;
           if (postImage) {
             modalContent += `<div class="text-center mt-3">
               <img src="${postImage.src}" alt="Imagen del post" style="max-width: 100%; max-height: 400px; border-radius: 8px; cursor: pointer;" onclick="showPostImageModal('${postImage.src}', '${title}')">
@@ -904,6 +1209,135 @@ function processContentForDisplay($content) {
           modalError.show();
         });
       }
+
+      // Función para manejar votos
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('vote-btn')) {
+          const postId = e.target.getAttribute('data-post-id');
+          const voteType = e.target.getAttribute('data-vote-type');
+          
+          console.log('Votando:', { postId, voteType }); // Debug
+          
+          // Deshabilitar el botón inmediatamente
+          e.target.style.opacity = '0.5';
+          e.target.style.pointerEvents = 'none';
+          e.target.style.cursor = 'not-allowed';
+          
+          // Enviar voto al servidor
+          const formData = new FormData();
+          formData.append('action', 'vote');
+          formData.append('post_id', postId);
+          formData.append('vote_type', voteType);
+          
+          fetch('dashboard.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => {
+            console.log('Response status:', response.status); // Debug
+            return response.json();
+          })
+          .then(data => {
+            console.log('Response data:', data); // Debug
+            if (data.success) {
+              // Actualizar conteos en tiempo real - corregir selector
+              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"][data-vote-type="${voteType}"]`);
+              console.log('Encontrados elementos de conteo:', countElements.length); // Debug
+              
+              countElements.forEach(span => {
+                const type = span.getAttribute('data-vote-type');
+                if (data.counts[type] !== undefined) {
+                  const oldValue = span.textContent;
+                  span.textContent = `[${data.counts[type]}]`;
+                  console.log(`Actualizando ${type}: ${oldValue} -> [${data.counts[type]}]`); // Debug
+                }
+              });
+              
+              // Si es un voto de fama, actualizar también el contador de famas en profile.php si está abierto
+              if (voteType === 'fama') {
+                // Buscar y actualizar el contador de famas en el perfil si está visible
+                const famaStats = document.querySelectorAll('.insta-profile-stat span');
+                famaStats.forEach(stat => {
+                  if (stat.textContent.includes('💎')) {
+                    const currentFamas = parseInt(stat.textContent.match(/\d+/)[0]) || 0;
+                    const newFamas = currentFamas + 1;
+                    stat.innerHTML = stat.textContent.replace(/\d+/, newFamas);
+                    console.log(`Actualizando famas en dashboard: ${currentFamas} -> ${newFamas}`);
+                  }
+                });
+                
+                // Notificar a otras páginas sobre el cambio de famas
+                const famaUpdate = {
+                  type: 'fama_update',
+                  post_id: postId,
+                  timestamp: Date.now()
+                };
+                localStorage.setItem('fama_update', JSON.stringify(famaUpdate));
+                
+                // Disparar evento personalizado para otras pestañas
+                window.dispatchEvent(new CustomEvent('famaUpdated', {
+                  detail: famaUpdate
+                }));
+              }
+              
+              // Cambiar estilo del botón para indicar que está votado y deshabilitarlo permanentemente
+              e.target.style.filter = 'brightness(1.3)';
+              e.target.style.transform = 'scale(1.1)';
+              e.target.style.opacity = '0.7';
+              e.target.style.pointerEvents = 'none';
+              e.target.style.cursor = 'not-allowed';
+              e.target.classList.add('voted');
+              
+              // Mostrar mensaje de éxito
+              console.log(`Voto ${voteType} registrado exitosamente`);
+              
+              // Opcional: mostrar notificación temporal
+              const notification = document.createElement('div');
+              notification.textContent = `¡Voto ${voteType} registrado!`;
+              notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 9999;
+                font-weight: bold;
+              `;
+              document.body.appendChild(notification);
+              
+              // Remover notificación después de 2 segundos
+              setTimeout(() => {
+                if (notification.parentNode) {
+                  notification.parentNode.removeChild(notification);
+                }
+              }, 2000);
+              
+            } else {
+              console.error('Error al votar:', data.error);
+              // Mostrar mensaje al usuario
+              alert('Error: ' + data.error);
+              // Rehabilitar el botón si hay error
+              e.target.style.opacity = '1';
+              e.target.style.pointerEvents = 'auto';
+              e.target.style.cursor = 'pointer';
+              e.target.style.filter = 'brightness(1)';
+              e.target.style.transform = 'scale(1)';
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('Error de conexión. Verifica la consola para más detalles.');
+            // Rehabilitar el botón si hay error
+            e.target.style.opacity = '1';
+            e.target.style.pointerEvents = 'auto';
+            e.target.style.cursor = 'pointer';
+            e.target.style.filter = 'brightness(1)';
+            e.target.style.transform = 'scale(1)';
+          });
+        }
+      });
     });
   </script>
 </body>

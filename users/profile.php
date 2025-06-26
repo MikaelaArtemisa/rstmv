@@ -2,12 +2,89 @@
 session_start();
 require_once '../includes/db.php'; // Ajusta el path si es necesario
 
+// Crear tabla post_votes si no existe
+try {
+    $createTableSQL = "
+    CREATE TABLE IF NOT EXISTS post_votes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        user_id INT NOT NULL,
+        vote_type ENUM('like', 'dislike', 'fama') NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_vote (post_id, user_id, vote_type),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )";
+    $pdo->exec($createTableSQL);
+    
+    // Crear índices si no existen
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_post_id ON post_votes(post_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_user_id ON post_votes(user_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_post_votes_type ON post_votes(vote_type)");
+} catch (PDOException $e) {
+    error_log("Error creando tabla post_votes: " . $e->getMessage());
+}
+
+// Agregar campo famas a la tabla users si no existe
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS famas INT DEFAULT 0");
+} catch (PDOException $e) {
+    error_log("Error agregando campo famas: " . $e->getMessage());
+}
+
+// Crear tabla user_famas si no existe
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS user_famas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            voter_id INT NOT NULL,
+            target_user_id INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_user_fama (voter_id, target_user_id),
+            FOREIGN KEY (voter_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ");
+} catch (PDOException $e) {
+    error_log("Error creando tabla user_famas: " . $e->getMessage());
+}
+
+// Endpoint para obtener famas actualizado
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_famas') {
+    header('Content-Type: application/json');
+    
+    $username_param = $_GET['username'] ?? '';
+    
+    if (empty($username_param)) {
+        echo json_encode(['success' => false, 'error' => 'Username requerido']);
+        exit;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT famas FROM users WHERE username = ?");
+        $stmt->execute([$username_param]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user) {
+            echo json_encode([
+                'success' => true,
+                'famas' => intval($user['famas'] ?? 0)
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor']);
+    }
+    exit;
+}
+
 // Determinar a quién mostrar
 $username_param = isset($_GET['username']) ? trim($_GET['username']) : null;
 
 if ($username_param) {
     // Buscar usuario por username
-    $stmt = $pdo->prepare("SELECT id, email, username, aboutme, profile_picture FROM users WHERE username = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, email, username, aboutme, profile_picture, famas FROM users WHERE username = ? LIMIT 1");
     $stmt->execute([$username_param]);
     $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$user_info) {
@@ -26,25 +103,60 @@ if ($username_param) {
     }
     $user_id = $_SESSION['user_id'];
     $username = $_SESSION['username'];
-    $stmt = $pdo->prepare("SELECT id, email, username, aboutme, profile_picture FROM users WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, email, username, aboutme, profile_picture, famas FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$user_id]);
     $user_info = $stmt->fetch(PDO::FETCH_ASSOC);
     $is_own_profile = true;
 }
 
-// Obtener SOLO los posts del usuario mostrado
-$stmt = $pdo->prepare("SELECT * FROM posts WHERE user_id = ? ORDER BY fecha DESC");
-$stmt->execute([$user_id]);
-$posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Obtener SOLO los posts del usuario mostrado con conteos de votos
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.*,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'like' THEN 1 ELSE 0 END), 0) as likes_count,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'dislike' THEN 1 ELSE 0 END), 0) as dislikes_count,
+               COALESCE(SUM(CASE WHEN pv.vote_type = 'fama' THEN 1 ELSE 0 END), 0) as famas_count
+        FROM posts p 
+        LEFT JOIN post_votes pv ON p.id = pv.post_id
+        WHERE p.user_id = ?
+        GROUP BY p.id, p.user_id, p.tipo, p.contenido, p.imagen, p.fecha
+        ORDER BY p.fecha DESC
+    ");
+    $stmt->execute([$user_id]);
+    $all_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    // Si hay error, usar consulta simple sin votos
+    $stmt = $pdo->prepare("SELECT * FROM posts WHERE user_id = ? ORDER BY fecha DESC");
+    $stmt->execute([$user_id]);
+    $all_posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Agregar conteos de votos como 0 por defecto
+    foreach ($all_posts as &$post) {
+        $post['likes_count'] = 0;
+        $post['dislikes_count'] = 0;
+        $post['famas_count'] = 0;
+    }
+}
 
-// Calcular contadores por tipo de post
+// Calcular contadores por tipo de post (sobre todos los posts)
 $fama_count = 0;
 $conf_publica_count = 0;
 $conf_anonima_count = 0;
-foreach ($posts as $post) {
+foreach ($all_posts as $post) {
     if ($post['tipo'] === 'POST') $fama_count++;
     if ($post['tipo'] === 'CONFESIÓN PUBLICA') $conf_publica_count++;
     if ($post['tipo'] === 'CONFESIÓN ANONIMA') $conf_anonima_count++;
+}
+
+// Para mostrar en la galería:
+if ($is_own_profile) {
+    $posts = $all_posts; // El usuario ve todos sus posts
+} else {
+    // Los demás no ven confesiones anónimas
+    $posts = array_filter($all_posts, function($post) {
+        return $post['tipo'] !== 'CONFESIÓN ANONIMA';
+    });
+    $posts = array_values($posts);
 }
 
 // Función para obtener la URL de la imagen de perfil
@@ -95,6 +207,155 @@ function processContentForDisplay($content) {
     
     return $content;
 }
+
+// Procesar votos si se recibe una petición POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'vote') {
+    header('Content-Type: application/json');
+    
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'error' => 'No autenticado']);
+        exit;
+    }
+    
+    $user_id = $_SESSION['user_id'];
+    $post_id = intval($_POST['post_id'] ?? 0);
+    $vote_type = $_POST['vote_type'] ?? '';
+    
+    // Validar tipo de voto
+    if (!in_array($vote_type, ['like', 'dislike', 'fama'])) {
+        echo json_encode(['success' => false, 'error' => 'Tipo de voto inválido']);
+        exit;
+    }
+    
+    try {
+        // Verificar que el post existe
+        $stmt = $pdo->prepare("SELECT id FROM posts WHERE id = ?");
+        $stmt->execute([$post_id]);
+        if (!$stmt->fetch()) {
+            echo json_encode(['success' => false, 'error' => 'Post no encontrado']);
+            exit;
+        }
+        
+        // Verificar si el usuario ya votó este tipo en este post
+        $stmt = $pdo->prepare("SELECT id FROM post_votes WHERE post_id = ? AND user_id = ? AND vote_type = ?");
+        $stmt->execute([$post_id, $user_id, $vote_type]);
+        $existing_vote = $stmt->fetch();
+        
+        if ($existing_vote) {
+            // Si ya votó, no permitir votar de nuevo (botón bloqueado)
+            echo json_encode(['success' => false, 'error' => 'Ya has votado este tipo']);
+            exit;
+        } else {
+            // Si no ha votado, agregar el voto
+            $stmt = $pdo->prepare("INSERT INTO post_votes (post_id, user_id, vote_type) VALUES (?, ?, ?)");
+            $stmt->execute([$post_id, $user_id, $vote_type]);
+            
+            // Si es un voto de fama, actualizar el contador de famas del usuario del post
+            if ($vote_type === 'fama') {
+                // Obtener el user_id del post
+                $stmt = $pdo->prepare("SELECT user_id FROM posts WHERE id = ?");
+                $stmt->execute([$post_id]);
+                $post_user = $stmt->fetch();
+                
+                if ($post_user && $post_user['user_id'] != $user_id) { // No votarse a sí mismo
+                    // Actualizar famas del usuario del post
+                    $stmt = $pdo->prepare("UPDATE users SET famas = famas + 1 WHERE id = ?");
+                    $stmt->execute([$post_user['user_id']]);
+                }
+            }
+        }
+        
+        // Obtener conteos actualizados
+        $stmt = $pdo->prepare("
+            SELECT 
+                SUM(CASE WHEN vote_type = 'like' THEN 1 ELSE 0 END) as likes,
+                SUM(CASE WHEN vote_type = 'dislike' THEN 1 ELSE 0 END) as dislikes,
+                SUM(CASE WHEN vote_type = 'fama' THEN 1 ELSE 0 END) as famas
+            FROM post_votes 
+            WHERE post_id = ?
+        ");
+        $stmt->execute([$post_id]);
+        $counts = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        echo json_encode([
+            'success' => true,
+            'counts' => [
+                'likes' => intval($counts['likes'] ?? 0),
+                'dislikes' => intval($counts['dislikes'] ?? 0),
+                'famas' => intval($counts['famas'] ?? 0)
+            ]
+        ]);
+        
+    } catch (PDOException $e) {
+        error_log("Error en votación: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor']);
+    }
+    exit;
+}
+
+// Procesar voto de famas directo al usuario
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'give_fama_user') {
+    header('Content-Type: application/json');
+    
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'error' => 'No autenticado']);
+        exit;
+    }
+    
+    $voter_id = $_SESSION['user_id'];
+    $target_user_id = intval($_POST['target_user_id'] ?? 0);
+    
+    if ($voter_id == $target_user_id) {
+        echo json_encode(['success' => false, 'error' => 'No puedes darte famas a ti mismo']);
+        exit;
+    }
+    
+    try {
+        // Verificar que el usuario objetivo existe
+        $stmt = $pdo->prepare("SELECT id, username, famas FROM users WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        $target_user = $stmt->fetch();
+        
+        if (!$target_user) {
+            echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
+            exit;
+        }
+        
+        // Verificar si ya le dio famas a este usuario
+        $stmt = $pdo->prepare("SELECT id FROM user_famas WHERE voter_id = ? AND target_user_id = ?");
+        $stmt->execute([$voter_id, $target_user_id]);
+        $existing_fama = $stmt->fetch();
+        
+        if ($existing_fama) {
+            echo json_encode(['success' => false, 'error' => 'Ya le has dado famas a este usuario']);
+            exit;
+        }
+        
+        // Insertar el voto de fama
+        $stmt = $pdo->prepare("INSERT INTO user_famas (voter_id, target_user_id) VALUES (?, ?)");
+        $stmt->execute([$voter_id, $target_user_id]);
+        
+        // Actualizar famas del usuario objetivo
+        $stmt = $pdo->prepare("UPDATE users SET famas = famas + 1 WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        
+        // Obtener famas actualizado
+        $stmt = $pdo->prepare("SELECT famas FROM users WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        $updated_user = $stmt->fetch();
+        
+        echo json_encode([
+            'success' => true,
+            'new_famas' => intval($updated_user['famas']),
+            'message' => 'Famas otorgado exitosamente'
+        ]);
+        
+    } catch (PDOException $e) {
+        error_log("Error dando famas al usuario: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor: ' . $e->getMessage()]);
+    }
+    exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -122,6 +383,7 @@ function processContentForDisplay($content) {
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      padding-bottom: 80px; /* Espacio para el navbar inferior */
     }
     .container-full {
       width: 100vw;
@@ -133,6 +395,7 @@ function processContentForDisplay($content) {
       justify-content: center;
       align-items: center;
       min-height: 80vh;
+      margin-top: 80px; /* Margen superior para evitar que se superponga con elementos del navegador */
     }
     .insta-avatar {
       width: 110px;
@@ -254,6 +517,8 @@ function processContentForDisplay($content) {
       word-break: break-word;
       width: 100%;
       white-space: pre-wrap;
+      padding-left: 10px;
+      padding-right: 10px;
     }
     .insta-post-image {
       transition: transform 0.2s ease;
@@ -362,11 +627,13 @@ function processContentForDisplay($content) {
       font-size: 1em;
       color: #e0e0e0;
       resize: none;
-      padding: 0;
+      padding: 10px;
       margin: 0;
       font-family: sans-serif;
       box-sizing: border-box;
       background-color: transparent;
+      min-height: 120px;
+      cursor: text;
     }
     
     .publish-form .input-field::placeholder {
@@ -423,11 +690,177 @@ function processContentForDisplay($content) {
       border-color: #666;
       cursor: not-allowed;
     }
+
+    /* Estilos responsivos para móviles */
+    @media (max-width: 768px) {
+      .container-full {
+        margin-top: 450px !important;
+        padding-top: 20px !important;
+        padding-bottom: 120px !important;
+        min-height: auto;
+      }
+      .insta-profile-header {
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding: 0 15px;
+      }
+      .insta-profile-info {
+        text-align: center;
+        width: 100%;
+      }
+      .insta-avatar {
+        width: 90px;
+        height: 90px;
+      }
+      .insta-profile-username {
+        font-size: 1.5rem;
+      }
+      .insta-profile-stats {
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .insta-gallery {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 0 15px;
+        margin-bottom: 100px; /* Espacio extra para el navbar */
+      }
+      .insta-post-card {
+        aspect-ratio: auto;
+        min-height: 200px;
+        max-height: 300px;
+      }
+      .insta-profile-info-extra {
+        margin: 0 10px;
+      }
+    }
+    @media (max-width: 480px) {
+      .container-full {
+        margin-top: 500px !important;
+        padding-top: 15px !important;
+        padding-bottom: 140px !important;
+      }
+      .insta-avatar {
+        width: 80px;
+        height: 80px;
+      }
+      .insta-profile-username {
+        font-size: 1.3rem;
+      }
+      .insta-profile-stats {
+        gap: 0.8rem;
+        flex-wrap: wrap;
+      }
+      .insta-profile-stat {
+        min-width: 80px;
+      }
+      .insta-profile-stat span {
+        font-size: 1rem;
+      }
+      .insta-profile-stat small {
+        font-size: 0.8rem;
+      }
+      .insta-post-content {
+        font-size: 1em;
+        margin-top: 2em;
+      }
+      .vote-buttons {
+        bottom: 5px;
+        left: 5px;
+        gap: 8px;
+      }
+      .vote-btn {
+        font-size: 1em !important;
+      }
+      .vote-count {
+        font-size: 0.8em !important;
+      }
+      .insta-profile-header {
+        padding: 0 10px;
+      }
+      .insta-gallery {
+        padding: 0 10px;
+        margin-bottom: 120px;
+      }
+    }
+    
+    /* Estilos para el botón Dar Famas */
+    .give-fama-btn {
+      transition: all 0.3s ease;
+      border-radius: 20px;
+      padding: 8px 16px;
+      font-size: 0.9em;
+      box-shadow: 0 2px 8px rgba(23, 162, 184, 0.3);
+      background: #17a2b8 !important;
+      border-color: #17a2b8 !important;
+      color: white !important;
+    }
+    
+    .give-fama-btn:hover:not(:disabled):not(.voted) {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(23, 162, 184, 0.5);
+      background: #138496 !important;
+      border-color: #138496 !important;
+    }
+    
+    .give-fama-btn:active:not(:disabled):not(.voted) {
+      transform: scale(0.95);
+    }
+    
+    .give-fama-btn.voted {
+      pointer-events: none;
+      cursor: not-allowed;
+      background: #28a745 !important;
+      border-color: #28a745 !important;
+      color: white !important;
+    }
+    
+    .give-fama-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    
+    /* Estilos para el texto promocional y URL */
+    .profile-promo-text {
+      color: #c2a4ff;
+      font-size: 0.9em;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    
+    .profile-promo-text i {
+      color: #ff6b6b;
+      margin-right: 5px;
+    }
+    
+    .profile-url-text {
+      color: #aaa;
+      font-size: 0.8em;
+      margin-bottom: 0;
+    }
+    
+    .profile-url-text i {
+      color: #17a2b8;
+      margin-right: 5px;
+    }
+    
+    .profile-url-link {
+      color: #17a2b8;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    
+    .profile-url-link:hover {
+      color: #138496;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
 <?php include '../includes/partials/navbar.php'; ?>
-<div class="container-full py-4">
+<div class="container-full py-4" style="margin-top: 60px;">
   <!-- Encabezado tipo Instagram -->
   <div class="insta-profile-header mb-4">
     <img src="<?php echo getProfilePictureUrl($user_info['profile_picture'], $username); ?>" alt="Avatar" class="insta-avatar" onclick="showImageModal(this.src, '<?php echo htmlspecialchars($username); ?>')">
@@ -439,28 +872,82 @@ function processContentForDisplay($content) {
       <?php if ($is_own_profile): ?>
         <a href="edit-profile.php" class="btn btn-outline-light btn-sm">Editar perfil</a>
       <?php endif; ?>
-    </div>
+      </div>
+      <!-- Mostrar URL del perfil y botón para copiar -->
+      <div class="mt-2 mb-2 d-flex align-items-center gap-2" style="flex-wrap:wrap;">
+        <?php
+          $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']);
+          // Siempre incluir el username en la URL, incluso para el propio perfil
+          $profile_url = $base_url . '/profile.php?username=' . urlencode($username);
+        ?>
+        <input type="text" id="profileUrlInput" class="form-control form-control-sm" value="<?php echo htmlspecialchars($profile_url); ?>" readonly style="max-width:320px; background:#222; color:#c2a4ff; border:1px solid #6a0dad;">
+        <button class="btn btn-secondary btn-sm" type="button" onclick="copiarUrlPerfil()"><i class="bi bi-share"></i> Compartir perfil</button>
+        
+        <!-- Botón Dar Famas -->
+        <?php if (!$is_own_profile): ?>
+          <button class="btn btn-outline-info btn-sm give-fama-btn" 
+                  data-user-id="<?php echo $user_id; ?>" 
+                  data-username="<?php echo htmlspecialchars($username); ?>"
+                  style="background: #17a2b8; border-color: #17a2b8; color: white; font-weight: bold; display: inline-block !important;">
+            <i class="bi bi-gem"></i> Dar Famas
+          </button>
+        <?php endif; ?>
+      </div>
+      
+      <!-- Texto promocional y URL del perfil -->
+      <div class="mt-2 mb-2">
+        <p class="profile-promo-text">
+          <i class="bi bi-heart-fill"></i> 
+          Sígueme en InacX y dame famas
+        </p>
+        <p class="profile-url-text">
+          <i class="bi bi-link-45deg"></i> 
+          <a href="<?php echo htmlspecialchars($profile_url); ?>" target="_blank" class="profile-url-link">
+            <?php echo htmlspecialchars($profile_url); ?>
+          </a>
+        </p>
+      </div>
+      <script>
+        function copiarUrlPerfil() {
+          // Copiar el texto promocional + la URL del perfil
+          var textoPromocional = "Sígueme en InacX y dame famas";
+          var urlPerfil = document.getElementById('profileUrlInput').value;
+          var textoCompleto = textoPromocional + " " + urlPerfil;
+          
+          // Crear un elemento temporal para copiar el texto
+          var tempInput = document.createElement('textarea');
+          tempInput.value = textoCompleto;
+          document.body.appendChild(tempInput);
+          tempInput.select();
+          tempInput.setSelectionRange(0, 99999); // Para móviles
+          document.execCommand('copy');
+          document.body.removeChild(tempInput);
+          
+          // Mostrar feedback
+          var btn = event.target.closest('button');
+          var original = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-check-circle"></i> ¡Copiado!';
+          setTimeout(function(){ btn.innerHTML = original; }, 1200);
+        }
+      </script>
       <div class="insta-profile-stats">
         <div class="insta-profile-stat">
           <span> 📝 <?php echo count($posts); ?> 📝</span>
           <small>Publicaciones</small>
         </div>
         <div class="insta-profile-stat">
-          <span> 💎​​ <?php echo  $fama_count; ?> 💎​</span>
+          <span> 💎​​ <?php echo $user_info['famas'] ?? 0; ?> 💎​</span>
           <small>Fama</small>
-        </div>
-        <div class="insta-profile-stat">
-          <span> ​🫨 <?php echo $conf_publica_count; ?> 🫨​</span>
-          <small>Conf. Públicas</small>
         </div>
         <div class="insta-profile-stat">
           <span>​🙈 <?php echo $conf_anonima_count; ?> 🙈​</span>
           <small>Conf. Anónima</small>
         </div>
       </div>
+      
       <!-- Información del perfil -->
       <div class="insta-profile-info-extra mt-2 mb-2 p-2" style="background:#181c2f; border-radius:10px;">
-        <div><strong>Biografía:</strong> <?php echo htmlspecialchars($user_info['aboutme'] ?? ''); ?></div>
+        <div><strong>⭐​:</strong> <?php echo htmlspecialchars($user_info['aboutme'] ?? ''); ?></div>
       </div>
 
     </div>
@@ -470,10 +957,12 @@ function processContentForDisplay($content) {
   <div class="insta-gallery mb-5 compact-gallery">
     <?php if (empty($posts)): ?>
       <div class="insta-post-card" style="aspect-ratio: auto; min-height: 200px;">
-        <div class="insta-post-content">
-          <p class="text-muted">No hay publicaciones aún.</p>
+        <div class="insta-post-content" style="color: #fff;">
+          <p class="text-white">No hay publicaciones aún.</p>
           <?php if ($is_own_profile): ?>
-            <a href="dashboard.php" class="btn btn-primary btn-sm">Ir al dashboard para publicar</a>
+            <div style="display: flex; justify-content: center;">
+              <a href="dashboard.php" class="btn btn-primary btn-sm">Ir al dashboard para publicar</a>
+            </div>
           <?php endif; ?>
         </div>
       </div>
@@ -482,6 +971,17 @@ function processContentForDisplay($content) {
         <div class="insta-post-card" onclick="showPostModal('<?php echo htmlspecialchars($post['tipo']); ?>', '<?php echo htmlspecialchars(processContentForDisplay($post['contenido'])); ?>', '<?php echo date('d/m/Y H:i', strtotime($post['fecha'])); ?>', '<?php echo $post['id']; ?>')">
           <div class="insta-post-type"><?php echo htmlspecialchars($post['tipo']); ?></div>
           <div class="insta-post-date"><?php echo date('d/m/Y', strtotime($post['fecha'])); ?></div>
+          
+          <!-- Botones de votación -->
+          <div class="vote-buttons" style="position: absolute; bottom: 10px; left: 10px; display: flex; gap: 10px; z-index: 10;">
+            <div class="vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="like" style="cursor: pointer; font-size: 1.2em;" onclick="event.stopPropagation();">❤️</div>
+            <span class="vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="like" style="color: #c2a4ff; font-size: 0.9em;"><?php echo $post['likes_count']; ?></span>
+            <div class="vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="dislike" style="cursor: pointer; font-size: 1.2em;" onclick="event.stopPropagation();">☠️</div>
+            <span class="vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="dislike" style="color: #c2a4ff; font-size: 0.9em;"><?php echo $post['dislikes_count']; ?></span>
+            <div class="vote-btn" data-post-id="<?php echo $post['id']; ?>" data-vote-type="fama" style="cursor: pointer; font-size: 1.2em;" onclick="event.stopPropagation();">💎</div>
+            <span class="vote-count" data-post-id="<?php echo $post['id']; ?>" data-vote-type="fama" style="color: #c2a4ff; font-size: 0.9em;"><?php echo $post['famas_count']; ?></span>
+          </div>
+          
           <?php if (!empty($post['imagen'])): ?>
             <div class="insta-post-image" style="width: 100%; height: 60%; margin-bottom: 10px;">
               <img src="../uploads/post_images/<?php echo htmlspecialchars($post['imagen']); ?>" 
@@ -489,7 +989,7 @@ function processContentForDisplay($content) {
                    style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
             </div>
           <?php endif; ?>
-          <div class="insta-post-content" style="<?php echo !empty($post['imagen']) ? 'margin-top: 0;' : 'margin-top: 2.5em;'; ?>">
+          <div class="insta-post-content" style="text-align: left; <?php echo !empty($post['imagen']) ? 'margin-top: 0;' : 'margin-top: 2.5em;'; ?>">
             <?php echo nl2br(processContentForDisplay(substr($post['contenido'], 0, 100))); ?><?php echo strlen($post['contenido']) > 100 ? '...' : ''; ?>
           </div>
         </div>
@@ -686,11 +1186,16 @@ function processContentForDisplay($content) {
       const clickedElement = event.currentTarget;
       const postImage = clickedElement.querySelector('.insta-post-image img');
       
-      let modalContent = `<p>${contenido}</p>`;
+      let modalContent = `<p style="text-align: left;">${contenido}</p>`;
       if (postImage) {
         modalContent += `<div class="text-center mt-3">
           <img src="${postImage.src}" alt="Imagen del post" style="max-width: 100%; max-height: 400px; border-radius: 8px; cursor: pointer;" onclick="showPostImageModal('${postImage.src}', '${tipo}')">
         </div>`;
+      }
+      
+      // Mostrar 'Anónimo' si es confesión anónima
+      if (tipo === 'CONFESIÓN ANONIMA') {
+        modalContent = `<div style='font-weight:bold;'>Anónimo</div>` + modalContent;
       }
       
       document.getElementById('modalVerPostBody').innerHTML = modalContent;
@@ -718,12 +1223,23 @@ function processContentForDisplay($content) {
       const file = event.target.files[0];
       if (!file) return;
 
-      // Validaciones de imagen
-      const tiposPermitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      // Validaciones de imagen - incluir formatos de celulares
+      const tiposPermitidos = [
+        'image/jpeg', 
+        'image/jpg', 
+        'image/png', 
+        'image/gif',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'image/bmp',
+        'image/tiff',
+        'image/tif'
+      ];
       const tamanoMaximo = 5 * 1024 * 1024; // 5MB
 
       if (!tiposPermitidos.includes(file.type)) {
-        mostrarError('Formato de imagen no válido. Solo se permiten JPG, PNG y GIF');
+        mostrarError('Formato de imagen no válido. Formatos permitidos: JPG, PNG, GIF, WebP, HEIC, BMP, TIFF');
         return;
       }
 
@@ -732,14 +1248,67 @@ function processContentForDisplay($content) {
         return;
       }
 
-      // Mostrar vista previa
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        document.getElementById('imagePreview').src = e.target.result;
-        document.getElementById('imagePreviewSection').style.display = 'block';
-        selectedImageFile = file;
+      // Comprimir imagen antes de mostrar vista previa
+      comprimirImagen(file, function(compressedFile) {
+        // Mostrar vista previa con la imagen comprimida
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('imagePreview').src = e.target.result;
+          document.getElementById('imagePreviewSection').style.display = 'block';
+          selectedImageFile = compressedFile;
+        };
+        reader.readAsDataURL(compressedFile);
+      });
+    }
+
+    // Función para comprimir imagen
+    function comprimirImagen(file, callback) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = function() {
+        // Calcular nuevas dimensiones manteniendo proporción
+        let { width, height } = img;
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
+        
+        // Configurar canvas
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Dibujar imagen redimensionada
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convertir a blob con compresión
+        canvas.toBlob(function(blob) {
+          // Crear nuevo archivo con el blob comprimido
+          const compressedFile = new File([blob], file.name, {
+            type: file.type,
+            lastModified: Date.now()
+          });
+          
+          // Verificar si la compresión fue efectiva
+          if (compressedFile.size >= file.size) {
+            // Si no se comprimió, usar el archivo original
+            callback(file);
+          } else {
+            console.log(`Imagen comprimida: ${file.size} -> ${compressedFile.size} bytes (${Math.round((1 - compressedFile.size/file.size) * 100)}% reducción)`);
+            callback(compressedFile);
+          }
+        }, file.type, 0.8); // Calidad 0.8 (80%)
       };
-      reader.readAsDataURL(file);
+      
+      img.src = URL.createObjectURL(file);
     }
 
     // Función para remover imagen seleccionada
@@ -822,6 +1391,292 @@ function processContentForDisplay($content) {
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+      // Escuchar cambios de famas desde otras páginas
+      window.addEventListener('storage', function(e) {
+        if (e.key === 'fama_update') {
+          const famaUpdate = JSON.parse(e.newValue);
+          if (famaUpdate && famaUpdate.type === 'fama_update') {
+            // Actualizar contador de famas en el perfil
+            updateFamasCount();
+          }
+        }
+      });
+      
+      // Escuchar eventos personalizados
+      window.addEventListener('famaUpdated', function(e) {
+        updateFamasCount();
+      });
+      
+      // Función para actualizar el contador de famas
+      function updateFamasCount() {
+        // Hacer una petición AJAX para obtener el famas actualizado
+        fetch('profile.php?action=get_famas&username=<?php echo urlencode($username); ?>')
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Actualizar el contador de famas en el perfil
+              const famaStats = document.querySelectorAll('.insta-profile-stat span');
+              famaStats.forEach(stat => {
+                if (stat.textContent.includes('💎')) {
+                  stat.innerHTML = ` 💎​​ ${data.famas} 💎​`;
+                  console.log(`Famas actualizado en profile.php: ${data.famas}`);
+                }
+              });
+            }
+          })
+          .catch(error => {
+            console.error('Error actualizando famas:', error);
+          });
+      }
+
+      // Función para manejar votos
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('vote-btn')) {
+          const postId = e.target.getAttribute('data-post-id');
+          const voteType = e.target.getAttribute('data-vote-type');
+          
+          console.log('Votando:', { postId, voteType }); // Debug
+          
+          // Deshabilitar el botón inmediatamente
+          e.target.style.opacity = '0.5';
+          e.target.style.pointerEvents = 'none';
+          e.target.style.cursor = 'not-allowed';
+          
+          // Enviar voto al servidor
+          const formData = new FormData();
+          formData.append('action', 'vote');
+          formData.append('post_id', postId);
+          formData.append('vote_type', voteType);
+          
+          fetch('profile.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => {
+            console.log('Response status:', response.status); // Debug
+            return response.json();
+          })
+          .then(data => {
+            console.log('Response data:', data); // Debug
+            if (data.success) {
+              // Actualizar conteos en tiempo real - corregir selector
+              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"][data-vote-type="${voteType}"]`);
+              console.log('Encontrados elementos de conteo:', countElements.length); // Debug
+              
+              countElements.forEach(span => {
+                const type = span.getAttribute('data-vote-type');
+                if (data.counts[type] !== undefined) {
+                  const oldValue = span.textContent;
+                  span.textContent = data.counts[type];
+                  console.log(`Actualizando ${type}: ${oldValue} -> ${data.counts[type]}`); // Debug
+                }
+              });
+              
+              // Si es un voto de fama, actualizar también el contador de famas en el perfil
+              if (voteType === 'fama') {
+                // Actualizar el contador de famas en el perfil actual
+                const famaStats = document.querySelectorAll('.insta-profile-stat span');
+                famaStats.forEach(stat => {
+                  if (stat.textContent.includes('💎')) {
+                    const currentFamas = parseInt(stat.textContent.match(/\d+/)[0]) || 0;
+                    const newFamas = currentFamas + 1;
+                    stat.innerHTML = ` 💎​​ ${newFamas} 💎​`;
+                    console.log(`Actualizando famas en profile.php: ${currentFamas} -> ${newFamas}`);
+                  }
+                });
+                
+                // Notificar a otras páginas sobre el cambio de famas
+                const famaUpdate = {
+                  type: 'fama_update',
+                  post_id: postId,
+                  timestamp: Date.now()
+                };
+                localStorage.setItem('fama_update', JSON.stringify(famaUpdate));
+                
+                // Disparar evento personalizado para otras pestañas
+                window.dispatchEvent(new CustomEvent('famaUpdated', {
+                  detail: famaUpdate
+                }));
+              }
+              
+              // Cambiar estilo del botón para indicar que está votado y deshabilitarlo permanentemente
+              e.target.style.filter = 'brightness(1.3)';
+              e.target.style.transform = 'scale(1.1)';
+              e.target.style.opacity = '0.7';
+              e.target.style.pointerEvents = 'none';
+              e.target.style.cursor = 'not-allowed';
+              e.target.classList.add('voted');
+              
+              // Mostrar mensaje de éxito
+              console.log(`Voto ${voteType} registrado exitosamente`);
+              
+              // Opcional: mostrar notificación temporal
+              const notification = document.createElement('div');
+              notification.textContent = `¡Voto ${voteType} registrado!`;
+              notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 9999;
+                font-weight: bold;
+              `;
+              document.body.appendChild(notification);
+              
+              // Remover notificación después de 2 segundos
+              setTimeout(() => {
+                if (notification.parentNode) {
+                  notification.parentNode.removeChild(notification);
+                }
+              }, 2000);
+              
+            } else {
+              console.error('Error al votar:', data.error);
+              // Mostrar mensaje al usuario
+              alert('Error: ' + data.error);
+              // Rehabilitar el botón si hay error
+              e.target.style.opacity = '1';
+              e.target.style.pointerEvents = 'auto';
+              e.target.style.cursor = 'pointer';
+              e.target.style.filter = 'brightness(1)';
+              e.target.style.transform = 'scale(1)';
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('Error de conexión. Verifica la consola para más detalles.');
+            // Rehabilitar el botón si hay error
+            e.target.style.opacity = '1';
+            e.target.style.pointerEvents = 'auto';
+            e.target.style.cursor = 'pointer';
+            e.target.style.filter = 'brightness(1)';
+            e.target.style.transform = 'scale(1)';
+          });
+        }
+        
+        // Manejar botón "Dar Famas" directo al usuario
+        if (e.target.classList.contains('give-fama-btn') || e.target.closest('.give-fama-btn')) {
+          const button = e.target.classList.contains('give-fama-btn') ? e.target : e.target.closest('.give-fama-btn');
+          const targetUserId = button.getAttribute('data-user-id');
+          const username = button.getAttribute('data-username');
+          
+          console.log('Dando famas a usuario:', { targetUserId, username }); // Debug
+          
+          // Deshabilitar el botón inmediatamente
+          button.disabled = true;
+          button.style.opacity = '0.5';
+          button.style.pointerEvents = 'none';
+          button.style.cursor = 'not-allowed';
+          button.innerHTML = '<i class="bi bi-hourglass-split"></i> Procesando...';
+          
+          // Enviar voto de fama al servidor
+          const formData = new FormData();
+          formData.append('action', 'give_fama_user');
+          formData.append('target_user_id', targetUserId);
+          
+          fetch('profile.php', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => {
+            console.log('Response status:', response.status); // Debug
+            return response.json();
+          })
+          .then(data => {
+            console.log('Response data:', data); // Debug
+            if (data.success) {
+              // Actualizar contador de famas en tiempo real
+              const famaStats = document.querySelectorAll('.insta-profile-stat span');
+              famaStats.forEach(stat => {
+                if (stat.textContent.includes('💎')) {
+                  stat.innerHTML = ` 💎​​ ${data.new_famas} 💎​`;
+                  console.log(`Actualizando famas del usuario: ${data.new_famas}`);
+                }
+              });
+              
+              // Cambiar estilo del botón para indicar que está votado
+              button.style.background = '#28a745';
+              button.style.borderColor = '#28a745';
+              button.style.color = 'white';
+              button.style.filter = 'brightness(1.1)';
+              button.style.transform = 'scale(1.05)';
+              button.innerHTML = '<i class="bi bi-check-circle"></i> ¡Famas Dado!';
+              button.classList.add('voted');
+              
+              // Mostrar notificación de éxito
+              const notification = document.createElement('div');
+              notification.textContent = `¡Famas otorgado a ${username}!`;
+              notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 9999;
+                font-weight: bold;
+              `;
+              document.body.appendChild(notification);
+              
+              // Remover notificación después de 3 segundos
+              setTimeout(() => {
+                if (notification.parentNode) {
+                  notification.parentNode.removeChild(notification);
+                }
+              }, 3000);
+              
+              // Notificar a otras páginas sobre el cambio de famas
+              const famaUpdate = {
+                type: 'fama_update',
+                user_id: targetUserId,
+                timestamp: Date.now()
+              };
+              localStorage.setItem('fama_update', JSON.stringify(famaUpdate));
+              
+              // Disparar evento personalizado para otras pestañas
+              window.dispatchEvent(new CustomEvent('famaUpdated', {
+                detail: famaUpdate
+              }));
+              
+            } else {
+              console.error('Error al dar famas:', data.error);
+              // Mostrar mensaje al usuario
+              alert('Error: ' + data.error);
+              // Rehabilitar el botón si hay error
+              button.disabled = false;
+              button.style.opacity = '1';
+              button.style.pointerEvents = 'auto';
+              button.style.cursor = 'pointer';
+              button.style.background = '#17a2b8';
+              button.style.borderColor = '#17a2b8';
+              button.style.color = 'white';
+              button.style.filter = 'brightness(1)';
+              button.style.transform = 'scale(1)';
+              button.innerHTML = '<i class="bi bi-gem"></i> Dar Famas';
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('Error de conexión. Verifica la consola para más detalles.');
+            // Rehabilitar el botón si hay error
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.pointerEvents = 'auto';
+            button.style.cursor = 'pointer';
+            button.style.background = '#17a2b8';
+            button.style.borderColor = '#17a2b8';
+            button.style.color = 'white';
+            button.style.filter = 'brightness(1)';
+            button.style.transform = 'scale(1)';
+            button.innerHTML = '<i class="bi bi-gem"></i> Dar Famas';
+          });
+        }
+      });
+
       // HTML del formulario de publicar con el formato de publicarpost.html (igual que dashboard.php)
       const publicarFormHtml = `
         <div class="publish-form">
@@ -844,7 +1699,7 @@ function processContentForDisplay($content) {
           </div>
           <div class="toolbar">
             <div class="format-icons">
-              <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+              <input type="file" id="imageInput" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/heic,image/heif,image/bmp,image/tiff,image/tif" style="display:none;" onchange="handleImageSelect(event)">
               <i class="bi bi-camera-fill toolbar-icon" title="Cargar foto" onclick="document.getElementById('imageInput').click()"></i>
               <i class="bi bi-type-bold toolbar-icon" data-command="bold" title="Negritas"></i>
               <i class="bi bi-type-italic toolbar-icon" data-command="italic" title="Cursiva"></i>
