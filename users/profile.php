@@ -356,6 +356,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
     exit;
 }
+
+// Procesar voto de famas directo al usuario
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'give_fama_user') {
+    header('Content-Type: application/json');
+    
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'error' => 'No autenticado']);
+        exit;
+    }
+    
+    $voter_id = $_SESSION['user_id'];
+    $target_user_id = intval($_POST['target_user_id'] ?? 0);
+    
+    if ($voter_id == $target_user_id) {
+        echo json_encode(['success' => false, 'error' => 'No puedes darte famas a ti mismo']);
+        exit;
+    }
+    
+    try {
+        // Verificar que el usuario objetivo existe
+        $stmt = $pdo->prepare("SELECT id, username, famas FROM users WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        $target_user = $stmt->fetch();
+        
+        if (!$target_user) {
+            echo json_encode(['success' => false, 'error' => 'Usuario no encontrado']);
+            exit;
+        }
+        
+        // Verificar si ya le dio famas a este usuario
+        $stmt = $pdo->prepare("SELECT id FROM user_famas WHERE voter_id = ? AND target_user_id = ?");
+        $stmt->execute([$voter_id, $target_user_id]);
+        $existing_fama = $stmt->fetch();
+        
+        if ($existing_fama) {
+            echo json_encode(['success' => false, 'error' => 'Ya le has dado famas a este usuario']);
+            exit;
+        }
+        
+        // Insertar el voto de fama
+        $stmt = $pdo->prepare("INSERT INTO user_famas (voter_id, target_user_id) VALUES (?, ?)");
+        $stmt->execute([$voter_id, $target_user_id]);
+        
+        // Actualizar famas del usuario objetivo
+        $stmt = $pdo->prepare("UPDATE users SET famas = famas + 1 WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        
+        // Obtener famas actualizado
+        $stmt = $pdo->prepare("SELECT famas FROM users WHERE id = ?");
+        $stmt->execute([$target_user_id]);
+        $updated_user = $stmt->fetch();
+        
+        echo json_encode([
+            'success' => true,
+            'new_famas' => intval($updated_user['famas']),
+            'message' => 'Famas otorgado exitosamente'
+        ]);
+        
+    } catch (PDOException $e) {
+        error_log("Error dando famas al usuario: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor: ' . $e->getMessage()]);
+    }
+    exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -885,11 +949,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         <!-- Botón Dar Famas -->
         <?php if (!$is_own_profile): ?>
-          <button class="btn btn-outline-info btn-sm give-fama-btn" 
-                  data-user-id="<?php echo $user_id; ?>" 
+          <?php
+            $fama_dada = false;
+            if (isset($_SESSION['user_id'])) {
+              $stmt = $pdo->prepare("SELECT id FROM user_famas WHERE voter_id = ? AND target_user_id = ?");
+              $stmt->execute([$_SESSION['user_id'], $user_id]);
+              $fama_dada = $stmt->fetch() ? true : false;
+            }
+          ?>
+          <button class="btn btn-outline-info btn-sm give-fama-btn<?php echo $fama_dada ? ' voted' : ''; ?>"
+                  data-user-id="<?php echo $user_id; ?>"
                   data-username="<?php echo htmlspecialchars($username); ?>"
-                  style="background: #17a2b8; border-color: #17a2b8; color: white; font-weight: bold; display: inline-block !important;">
-            <i class="bi bi-gem"></i> Dar Famas
+                  style="background: #17a2b8; border-color: #17a2b8; color: white; font-weight: bold; display: inline-block !important;"
+                  <?php if ($fama_dada) echo 'disabled'; ?>>
+            <i class="bi bi-gem"></i> <?php echo $fama_dada ? 'Fama Dada' : 'Dar Famas'; ?>
           </button>
         <?php endif; ?>
       </div>
@@ -1460,15 +1533,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             console.log('Response data:', data); // Debug
             if (data.success) {
               // Actualizar conteos en tiempo real - corregir selector
-              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"][data-vote-type="${voteType}"]`);
-              console.log('Encontrados elementos de conteo:', countElements.length); // Debug
-              
+              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"]`);
               countElements.forEach(span => {
                 const type = span.getAttribute('data-vote-type');
                 if (data.counts[type] !== undefined) {
-                  const oldValue = span.textContent;
                   span.textContent = data.counts[type];
-                  console.log(`Actualizando ${type}: ${oldValue} -> ${data.counts[type]}`); // Debug
                 }
               });
               
@@ -1752,9 +1821,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             e.preventDefault();
             let texto = input.innerHTML || input.innerText || input.value || input.textContent;
             texto = texto.trim();
-            
-            if (!texto) {
-              mostrarError('El campo de entrada está vacío.');
+            if (!texto && !selectedImageFile) {
+              mostrarError('Debes escribir algo o seleccionar una imagen.');
               return;
             }
             

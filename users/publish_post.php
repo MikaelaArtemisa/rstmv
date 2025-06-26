@@ -24,13 +24,14 @@ $tipo = trim($_POST['tipo'] ?? '');
 $contenido = trim($_POST['contenido'] ?? '');
 
 // Validaciones
-if (empty($tipo)) {
-    echo json_encode(['success' => false, 'error' => 'El tipo de publicación es requerido']);
+$hayImagen = isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK;
+if (empty($contenido) && !$hayImagen) {
+    echo json_encode(['success' => false, 'error' => 'Debes escribir algo o seleccionar una imagen.']);
     exit;
 }
 
-if (empty($contenido)) {
-    echo json_encode(['success' => false, 'error' => 'El contenido es requerido']);
+if (empty($tipo)) {
+    echo json_encode(['success' => false, 'error' => 'El tipo de publicación es requerido']);
     exit;
 }
 

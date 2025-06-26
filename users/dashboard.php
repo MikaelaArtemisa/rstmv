@@ -970,11 +970,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       if (publishButton) {
         publishButton.addEventListener('click', function () {
           const content = mainInputField.value.trim();
-          if (content) {
+          // Permitir publicar si hay texto o imagen seleccionada
+          if (content || selectedImageFile) {
             alert('Contenido a publicar: "' + content + '"');
             mainInputField.value = '';
           } else {
-            alert('El campo de entrada está vacío.');
+            alert('Debes escribir algo o seleccionar una imagen.');
           }
         });
       }
@@ -1054,9 +1055,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             e.preventDefault();
             let texto = input.innerHTML || input.innerText || input.value || input.textContent;
             texto = texto.trim();
-            
-            if (!texto) {
-              mostrarError('El campo de entrada está vacío.');
+            if (!texto && !selectedImageFile) {
+              mostrarError('Debes escribir algo o seleccionar una imagen.');
               return;
             }
             
@@ -1240,16 +1240,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
           .then(data => {
             console.log('Response data:', data); // Debug
             if (data.success) {
-              // Actualizar conteos en tiempo real - corregir selector
-              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"][data-vote-type="${voteType}"]`);
-              console.log('Encontrados elementos de conteo:', countElements.length); // Debug
-              
+              // Actualizar conteos en tiempo real
+              const countElements = document.querySelectorAll(`.vote-count[data-post-id="${postId}"]`);
               countElements.forEach(span => {
                 const type = span.getAttribute('data-vote-type');
                 if (data.counts[type] !== undefined) {
-                  const oldValue = span.textContent;
                   span.textContent = `[${data.counts[type]}]`;
-                  console.log(`Actualizando ${type}: ${oldValue} -> [${data.counts[type]}]`); // Debug
                 }
               });
               
